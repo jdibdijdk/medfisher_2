@@ -2283,7 +2283,15 @@ re2js/build/index.js:
    * limitations under the License.
    *)
 */
-
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then(registration => {
+        console.log('ServiceWorker registado com sucesso com o âmbito: ', registration.scope);
+      }).catch(err => {
+        console.log('Falha ao registar o ServiceWorker: ', err);
+      });
+    });
+  }
   </script>
   <noscript>Este site precisa de JavaScript.</noscript>
 </body>
