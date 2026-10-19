@@ -20,6 +20,10 @@
     // Aplica o tema antes de pintar (evita "flash" claro no modo escuro)
     (function () {
       try {
+        // ?u=02 entra direto com esse usuário (usado quando o banco abre dentro da Rotina de Estudos)
+        var qu = new URLSearchParams(location.search).get('u');
+        if (/^(0[1-9]|10)$/.test(qu || '')) localStorage.setItem('bq_usuario', qu);
+        if (window.top !== window) document.documentElement.classList.add('embutido');
         var t = localStorage.getItem('bq_tema') || 'auto';
         var escuro = t === 'escuro' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.classList.toggle('dark', escuro);
@@ -1535,7 +1539,7 @@ function uploadImagem_(u, p) {
         ${st===null?"":kA(st,ji)}
         <button type="button" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-brand hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800" data-exp="${xe}" aria-expanded="${Lt?"true":"false"}" aria-label="${Lt?"Recolher":"Expandir"} alternativa ${xe}"><i data-lucide="${Lt?"chevron-up":"chevron-down"}" class="h-4 w-4" aria-hidden="true"></i></button>
       </div>
-    </div>`}function zt(){let V=i[z],M=o.get(V),ce=rt("#q");if(!M){ce.innerHTML=String($n("file-question","Quest\xE3o indispon\xEDvel","Ela pode ter sido removida do banco. Use Pr\xF3xima para continuar."));return}let ye=u[V],xe=!!ye,Te=!Ie&&xe&&!_.has(V),Ve=Te?Hi(M):null,Lt=A[V]!==void 0?A[V]:Te||Ee.prefs.ocultarFoco===!1,me=A[V]!==void 0?A[V]:Te||!Ee.prefs.ocultarArea;Te&&!K.has(V)&&!N[V]&&!(Ve.alts||[]).some(We=>We.comentario)&&Ve.com&&K.add(V),Ne=Vg(V);let st=$[V]||($[V]=new Set),Zt=Ie?ye&&ye.marcada:Q,en=Tt=>Tc((M.imagens||[]).filter(We=>We.posicao===Tt)),ji=!!v[V],Gn=(Tt,We,qn,jr,Js="")=>O`<button type="button" id="${Tt}" class="relative flex h-9 w-9 items-center justify-center rounded-full text-brand hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800" aria-label="${qn}" title="${qn}" ${jr!==null?ot(`aria-pressed="${jr}"`):""}><i data-lucide="${We}" class="h-5 w-5 ${Js}" aria-hidden="true"></i></button>`;ce.innerHTML=String(O`
+    </div>`}function zt(){let V=i[z],M=o.get(V),ce=rt("#q");window.__mfQ=M||null;if(!M){ce.innerHTML=String($n("file-question","Quest\xE3o indispon\xEDvel","Ela pode ter sido removida do banco. Use Pr\xF3xima para continuar."));return}let ye=u[V],xe=!!ye,Te=!Ie&&xe&&!_.has(V),Ve=Te?Hi(M):null,Lt=A[V]!==void 0?A[V]:Te||Ee.prefs.ocultarFoco===!1,me=A[V]!==void 0?A[V]:Te||!Ee.prefs.ocultarArea;Te&&!K.has(V)&&!N[V]&&!(Ve.alts||[]).some(We=>We.comentario)&&Ve.com&&K.add(V),Ne=Vg(V);let st=$[V]||($[V]=new Set),Zt=Ie?ye&&ye.marcada:Q,en=Tt=>Tc((M.imagens||[]).filter(We=>We.posicao===Tt)),ji=!!v[V],Gn=(Tt,We,qn,jr,Js="")=>O`<button type="button" id="${Tt}" class="relative flex h-9 w-9 items-center justify-center rounded-full text-brand hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800" aria-label="${qn}" title="${qn}" ${jr!==null?ot(`aria-pressed="${jr}"`):""}><i data-lucide="${We}" class="h-5 w-5 ${Js}" aria-hidden="true"></i></button>`;ce.innerHTML=String(O`
     <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <header class="flex flex-wrap items-start justify-between gap-3 px-5 py-5 sm:px-8">
         <div class="min-w-0">
@@ -1548,6 +1552,7 @@ function uploadImagem_(u, p) {
           </div>
         </div>
         <div class="flex items-center gap-1">
+          ${window.top!==window?ot('<button type="button" id="b-env" class="mr-1 inline-flex items-center gap-2 rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700" title="Enviar esta questão para as Notas da Rotina"><i data-lucide="send" class="h-4 w-4" aria-hidden="true"></i><span>Enviar para Notas</span></button>'):""}
           ${Gn("b-rep","triangle-alert","Reportar problema nesta quest\xE3o",null)}
           ${Gn("b-fav","heart",l.has(V)?"Remover dos favoritos":"Favoritar",l.has(V)?"true":"false",l.has(V)?"fill-current text-rose-500":"")}
           ${O`<button type="button" id="b-nota" class="relative flex h-9 w-9 items-center justify-center rounded-full text-brand hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800" aria-label="Anotação e revisão" title="Anotação e revisão"><i data-lucide="pencil" class="h-5 w-5" aria-hidden="true"></i>${ji||B.has(V)?O`<span class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-sky-500 ring-2 ring-white dark:ring-slate-900"></span>`:""}</button>`}
@@ -2299,5 +2304,24 @@ re2js/build/index.js:
 
   </script>
   <noscript>Este site precisa de JavaScript.</noscript>
+<script>
+  // Ponte com a Rotina de Estudos: quando o banco abre dentro dela, "Enviar para Notas" manda a questão aberta
+  // (enunciado, alternativas, gabarito, comentários e imagens já carregadas) para a janela de cima.
+  (function () {
+    if (window.top === window) return;
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('#b-env');
+      if (!b || !window.__mfQ) return;
+      var q = window.__mfQ, art = document.querySelector('#q article');
+      var imgs = art ? Array.prototype.map.call(art.querySelectorAll('img[data-fid]'), function (i) { return i.src; }).filter(function (s) { return /^data:image\/(png|jpe?g|gif|webp);base64,/.test(s) || /^https:\/\//.test(s); }) : [];
+      var dados = { id: q.id, numero: q.numero, instituicao: q.instituicao, ano: q.ano, area: q.area, subarea: q.subarea, foco: q.foco, enunciado: q.enunciado,
+        alternativas: (q.alternativas || []).map(function (a) { return { letra: a.letra, texto: a.texto, comentario: a.comentario || '' }; }),
+        gabarito: q.gabarito, anulada: !!q.anulada, comentario: q.comentario || '', imagens: imgs };
+      window.parent.postMessage({ tipo: 'medfisher:questao', questao: dados }, '*');
+      b.querySelector('span').textContent = 'Enviada';
+      setTimeout(function () { var s = b.querySelector('span'); if (s) s.textContent = 'Enviar para Notas'; }, 2500);
+    });
+  })();
+</script>
 </body>
 </html>
