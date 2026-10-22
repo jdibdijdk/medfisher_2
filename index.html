@@ -2110,7 +2110,6 @@ var mfVFlash = { render: async function (r, { navegar: e, query: q }) {
   let f = { area: q.area ? [q.area] : [], subarea: "", foco: "", status: q.status || "", busca: "" }, pag = 1, res = null;
   r.innerHTML = String(O`
   <div class="flex flex-wrap items-end justify-between gap-3">
-    <div><h1 class="h1">Flashcards</h1><p class="muted mt-1 text-sm">Revisão espaçada (FSRS): avalie cada card e ele volta no momento certo.</p></div>
     <div class="flex flex-wrap gap-2">
       <button type="button" class="btn btn-outline btn-sm" id="b-novo"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Novo card</button>
       <a href="#/flashcards/importar" class="btn btn-outline btn-sm"><i data-lucide="upload" class="h-4 w-4" aria-hidden="true"></i>Importar em lote</a>
