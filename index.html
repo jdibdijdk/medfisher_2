@@ -1299,8 +1299,10 @@ function normalizar_(q, prova) {
   var numero = Number(q.numero);
   if (!isFinite(numero) || numero < 1 || Math.floor(numero) !== numero) return { erro: 'Campo "numero" deve ser um inteiro positivo.' };
   var area = str_(q.area), sub = str_(q.subarea), foco = str_(q.foco);
-  var et = erroTaxonomia_(area, sub, foco);
-  if (et) return { erro: et };
+  if (AREAS_VALIDAS.indexOf(area) < 0) return { erro: '\xC1rea inv\xE1lida: "' + area + '"' };
+  if (!sub || !foco) return { erro: 'Informe "subarea" e "foco".' };
+  if (sub.length > 120 || foco.length > 120) return { erro: '"subarea" e "foco" aceitam no m\xE1ximo 120 caracteres.' };
+  var novoTax = erroTaxonomia_(area, sub, foco) ? { area: area, subarea: sub, foco: foco } : null;
   var enunciado = str_(q.enunciado);
   if (!enunciado) return { erro: 'Enunciado vazio.' };
   var alts = q.alternativas === undefined || q.alternativas === null ? [] : q.alternativas;
@@ -1340,7 +1342,7 @@ function normalizar_(q, prova) {
   };
   var altJson = JSON.stringify(alternativas), imgJson = JSON.stringify(imagens);
   if (enunciado.length > MAX_CELULA || comentario.length > MAX_CELULA || altJson.length > MAX_CELULA || imgJson.length > MAX_CELULA) return { erro: 'Algum campo excede o limite de ' + MAX_CELULA + ' caracteres por c\xE9lula.' };
-  return { ok: ob };
+  return { ok: ob, novoTax: novoTax };
 }
 
 function linhaDeQuestao_(o) {
@@ -1362,10 +1364,10 @@ function importarLote_(u, p) {
   var prova = { instituicao: inst, ano: ano, id: str_(pv.id) || slug_(inst + ' ' + ano), nome: str_(pv.nome) || (inst + ' ' + ano) };
   if (!/^[A-Za-z0-9._-]{1,80}$/.test(prova.id)) throw erro_('prova.id inv\xE1lido.');
   var offset = Number(p.offset) || 0;
-  var res = { importadas: 0, duplicadas: [], erros: [], avisos: [], paraUpload: [] };
+  var res = { importadas: 0, duplicadas: [], erros: [], avisos: [], paraUpload: [], focosNovos: [] };
 
   comLock_(function () {
-    var idx = indice_(), chaves = {}, ids = {}, linhas = [];
+    var idx = indice_(), chaves = {}, ids = {}, linhas = [], novosTax = {};
     idx.forEach(function (q) { chaves[chaveQuestao_(q[I_INST], q[I_ANO], q[I_NUM])] = q[I_ID]; ids[q[I_ID]] = 1; });
     qs.forEach(function (q, i) {
       var linha = offset + i + 1, n = normalizar_(q, prova);
@@ -1387,10 +1389,13 @@ function importarLote_(u, p) {
       if (ids[ob.id]) { res.erros.push({ linha: linha, numero: ob.numero, id: ob.id, motivo: 'Id "' + ob.id + '" j\xE1 usado por outra quest\xE3o.' }); return; }
       if (!ob.comentario && (ob.alternativas.length || !ob.gabarito)) res.avisos.push({ linha: linha, numero: ob.numero, motivo: ob.alternativas.length ? 'Quest\xE3o sem coment\xE1rio.' : 'Quest\xE3o discursiva sem "gabarito" (resposta esperada) e sem "comentario".' });
       chaves[k] = ob.id; ids[ob.id] = 1;
+      if (n.novoTax) novosTax[n.novoTax.area + '|' + n.novoTax.subarea + '|' + n.novoTax.foco] = n.novoTax;
       linhas.push(linhaDeQuestao_(ob));
       ob.imagens.forEach(function (im) { res.paraUpload.push({ questaoId: ob.id, arquivo: im.arquivo, posicao: im.posicao, legenda: im.legenda }); });
       res.importadas++;
     });
+    var listaNovos = Object.keys(novosTax).map(function (k) { return novosTax[k]; });
+    if (listaNovos.length) res.focosNovos = acrescentarTax_(listaNovos);
     if (linhas.length) {
       anexar_(sh_('Questoes'), linhas);
       invalidarCache_();
@@ -1482,6 +1487,20 @@ function salvarTax_(t) {
   upsertConfig_('taxonomia', JSON.stringify(t));
   _taxJ = t;
   _tax = null;
+}
+
+/** Acrescenta à taxonomia as combinações área › subárea › foco que ainda não existem. Use dentro de comLock_. Devolve o que foi criado. */
+function acrescentarTax_(lista) {
+  var t = JSON.parse(JSON.stringify(tax_())), novos = [];
+  lista.forEach(function (n) {
+    var a = t.areas.filter(function (x) { return x.nome === n.area; })[0];
+    if (!a) { a = { nome: n.area, subareas: [] }; t.areas.push(a); }
+    var s = a.subareas.filter(function (x) { return x.nome === n.subarea; })[0];
+    if (!s) { s = { nome: n.subarea, focos: [] }; a.subareas.push(s); }
+    if (s.focos.indexOf(n.foco) < 0) { s.focos.push(n.foco); novos.push(n); }
+  });
+  if (novos.length) salvarTax_(t);
+  return novos;
 }
 
 function exigirAdmin_(u) {
@@ -1853,7 +1872,7 @@ function flashImportar_(u, p) {
   var fonte = str_(p.fonte).slice(0, 200);
   return comLock_(function () {
     var existentes = {}, ids = {}, linhas = [], agora = agora_();
-    var res = { importados: 0, duplicados: [], erros: [], ids: [] };
+    var res = { importados: 0, duplicados: [], erros: [], ids: [], focosNovos: [] }, novosTax = {};
     lerTudo_('Flashcards').forEach(function (r) {
       existentes[chaveCard_(r[4], r[5])] = String(r[0]);
       ids[String(r[0])] = 1;
@@ -1865,17 +1884,21 @@ function flashImportar_(u, p) {
       var frente = str_(c.frente).slice(0, 5000), verso = str_(c.verso).slice(0, 10000), extra = str_(c.extra).slice(0, 10000);
       if (!frente) { res.erros.push({ linha: n, motivo: 'Frente vazia.' }); return; }
       if (!verso) { res.erros.push({ linha: n, motivo: 'Verso vazio.' }); return; }
-      var e = erroTaxFlash_(area, sub, foco);
-      if (e) { res.erros.push({ linha: n, motivo: e }); return; }
+      if (AREAS_FLASH.indexOf(area) < 0) { res.erros.push({ linha: n, motivo: '\xC1rea inv\xE1lida: "' + area + '"' }); return; }
+      if (!sub || !foco) { res.erros.push({ linha: n, motivo: 'Informe "subarea" e "foco".' }); return; }
+      var novoT = erroTaxFlash_(area, sub, foco) ? { area: area, subarea: sub, foco: foco } : null;
       var k = chaveCard_(frente, verso);
       if (existentes[k]) { res.duplicados.push({ linha: n, id: existentes[k] }); return; }
       var id = str_(c.id).slice(0, 80);
       if (!id || ids[id] || !/^[A-Za-z0-9_.-]+$/.test(id)) id = novoId_('F');
       ids[id] = 1;
       existentes[k] = id;
+      if (novoT) novosTax[area + '|' + sub + '|' + foco] = novoT;
       linhas.push([id, area, sub, foco, frente, verso, extra, str_(c.fonte).slice(0, 200) || fonte, u, agora]);
       res.ids.push(id);
     });
+    var listaNovosF = Object.keys(novosTax).map(function (k) { return novosTax[k]; });
+    if (listaNovosF.length) res.focosNovos = acrescentarTax_(listaNovosF);
     anexar_(sh_('Flashcards'), linhas);
     res.importados = linhas.length;
     return res;
@@ -2408,9 +2431,7 @@ function mfValidarCard(c, mapa) {
   if (!txt("frente")) return "Frente vazia.";
   if (!txt("verso")) return "Verso vazio.";
   if (!mfAreasFlash().includes(txt("area"))) return `Área inválida: "${txt("area")}"`;
-  let s = mapa[txt("area") + "|" + txt("subarea")];
-  if (!s) return `Subárea "${txt("subarea")}" não existe em "${txt("area")}"`;
-  if (!s.has(txt("foco"))) return `Foco "${txt("foco")}" não existe em "${txt("area")} › ${txt("subarea")}"`;
+  if (!txt("subarea") || !txt("foco")) return 'Informe "subarea" e "foco".';
   return null;
 }
 var mfVImportarFlash = { render: async function (r, { navegar: e }) {
@@ -2426,6 +2447,7 @@ var mfVImportarFlash = { render: async function (r, { navegar: e }) {
       <button type="button" class="btn btn-primary btn-sm" id="b-p-gerar"><i data-lucide="copy" class="h-4 w-4" aria-hidden="true"></i>Copiar prompt: gerar de apostila</button>
       <button type="button" class="btn btn-outline btn-sm" id="b-p-formatar"><i data-lucide="copy" class="h-4 w-4" aria-hidden="true"></i>Copiar prompt: só formatar</button>
       <button type="button" class="btn btn-ghost btn-sm" id="b-modelo"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Baixar modelo (.json)</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-exportar="copiar"><i data-lucide="copy" class="h-4 w-4" aria-hidden="true"></i>Copiar lista de focos</button>
     </div>
     <p class="muted mt-2 text-xs">Os prompts já levam a lista atualizada de áreas, subáreas e focos.</p>
     <details class="mt-3"><summary class="cursor-pointer text-sm font-medium">Ver o modelo</summary><pre class="mt-2 max-h-72 overflow-auto rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/60">${JSON.stringify(MF_MODELO, null, 2)}</pre></details>
@@ -2438,6 +2460,7 @@ var mfVImportarFlash = { render: async function (r, { navegar: e }) {
   </section>
   <div id="resultado" class="mt-5" aria-live="polite"></div>`);
   let $ = s => r.querySelector(s);
+  mfLigarExportacao(r);
   function mostrarValidacao() {
     let mapa = Zv(Ee.taxonomia), validos = [], erros = [];
     pacotes.forEach(p => {
@@ -2447,9 +2470,12 @@ var mfVImportarFlash = { render: async function (r, { navegar: e }) {
         er ? erros.push(`[${p.origem}] card ${i + 1}: ${er}`) : validos.push({ ...c, linha: i + 1, fonte: String(c.fonte || p.fonte || "").trim() });
       });
     });
+    let novos = [], tx = (c, k) => String(c[k] ?? "").trim();
+    validos.forEach(c => { let k = tx(c, "area") + "|" + tx(c, "subarea"); (mapa[k] && mapa[k].has(tx(c, "foco"))) || (novos.push(`${tx(c, "area")} › ${tx(c, "subarea")} › ${tx(c, "foco")}`), (mapa[k] = mapa[k] || new Set).add(tx(c, "foco"))); });
     $("#resultado").innerHTML = String(O`<section class="card">
       <p class="font-semibold">${Gt(validos.length, "card válido", "cards válidos")}${erros.length ? O` · <span class="text-rose-600">${Gt(erros.length, "erro", "erros")}</span>` : ""}</p>
       ${erros.length ? O`<details class="mt-2" ${validos.length ? "" : ot("open")}><summary class="cursor-pointer text-sm font-medium text-rose-600">Ver erros</summary><ul class="mt-2 max-h-56 list-disc space-y-1 overflow-auto pl-5 text-xs">${erros.slice(0, 300).map(x => O`<li>${x}</li>`)}</ul></details>` : ""}
+      ${novos.length ? O`<details class="mt-2"><summary class="cursor-pointer text-sm font-medium text-sky-700 dark:text-sky-300">Focos novos que serão criados (${novos.length})</summary><ul class="mt-2 max-h-40 list-disc space-y-1 overflow-auto pl-5 text-xs">${novos.map(x => O`<li>${x}</li>`)}</ul></details>` : ""}
       ${validos.length ? O`<ul class="mt-3 space-y-2">${validos.slice(0, 3).map(c => O`<li class="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60"><p class="font-semibold">${c.frente}</p><p class="muted mt-1">${c.verso}</p><p class="muted mt-1 text-xs">${c.area} › ${c.subarea} › ${c.foco}</p></li>`)}</ul>
         <div class="mt-4 flex flex-wrap items-center gap-2"><button type="button" class="btn btn-primary" id="b-importar">Importar ${Gt(validos.length, "card", "cards")}</button><span class="muted text-xs" id="prog-imp"></span></div>` : ""}
     </section>`);
@@ -2458,18 +2484,21 @@ var mfVImportarFlash = { render: async function (r, { navegar: e }) {
   }
   async function importar(validos, botao) {
     botao.disabled = !0;
-    let tot = { importados: 0, duplicados: 0, erros: [] };
+    let tot = { importados: 0, duplicados: 0, erros: [], focos: [] };
     for (let i = 0; i < validos.length; i += 100) {
       $("#prog-imp").textContent = `Enviando ${Math.min(i + 100, validos.length)} de ${validos.length}…`;
       try {
         let res = await ge("flashImportar", { cards: validos.slice(i, i + 100) });
         tot.importados += res.importados; tot.duplicados += res.duplicados.length;
         res.erros.forEach(x => tot.erros.push(`card ${x.linha}: ${x.motivo}`));
+        (res.focosNovos || []).forEach(x => tot.focos.push(`${x.area} › ${x.subarea} › ${x.foco}`));
       } catch (x) { tot.erros.push(`Bloco ${i / 100 + 1}: ${x.message}`); }
     }
+    await mfAtualizarTax();
     $("#resultado").innerHTML = String(O`<section class="card">
       <p class="text-lg font-semibold">Importação concluída</p>
       <p class="mt-1 text-sm">${Gt(tot.importados, "card importado", "cards importados")} · ${Gt(tot.duplicados, "duplicado ignorado", "duplicados ignorados")}${tot.erros.length ? ` · ${Gt(tot.erros.length, "erro", "erros")}` : ""}</p>
+      ${tot.focos.length ? O`<details class="mt-2"><summary class="cursor-pointer text-sm font-medium text-sky-700 dark:text-sky-300">Focos novos adicionados ao site (${tot.focos.length})</summary><ul class="mt-2 max-h-40 list-disc space-y-1 overflow-auto pl-5 text-xs">${tot.focos.map(x => O`<li>${x}</li>`)}</ul></details>` : ""}
       ${tot.erros.length ? O`<ul class="mt-2 max-h-48 list-disc overflow-auto pl-5 text-xs text-rose-600">${tot.erros.map(x => O`<li>${x}</li>`)}</ul>` : ""}
       <div class="mt-4 flex gap-2"><a href="#/flashcards" class="btn btn-primary">Ver flashcards</a><button type="button" class="btn btn-ghost" id="b-mais">Importar mais</button></div></section>`);
     pacotes = [];
@@ -2572,6 +2601,14 @@ var mfVTax = { render: async function (r) {
   desenhar();
 } };
 
+/** Pré-visualização do importador: registra foco/subárea que ainda não existem (e os considera existentes para as próximas questões). */
+function mfNotarFocoNovo(mapa, q, t) {
+  let a = Ft(q.area), s = Ft(q.subarea), f = Ft(q.foco), k = a + "|" + s;
+  if (mapa[k] && mapa[k].has(f)) return;
+  (mapa[k] = mapa[k] || new Set).add(f);
+  t.novos.push({ area: a, subarea: s, foco: f });
+}
+
 // ── Exportar a lista de focos: Área → Subárea → Foco ──
 function mfBaixar(nome, texto, mime) {
   let u = URL.createObjectURL(new Blob([texto], { type: mime })), a = document.createElement("a");
@@ -2582,6 +2619,11 @@ async function mfExportarFocos(formato) {
   await mfAtualizarTax();
   let t = Ee.taxonomia || {}, areas = t.areas || [];
   if (!areas.length) return be("A lista de focos não está disponível agora.", "erro");
+  if (formato === "copiar") {
+    let linhas = [];
+    areas.forEach(a => a.subareas.forEach(s => s.focos.forEach(f => linhas.push([a.nome, s.nome, f].join("\t")))));
+    return mfCopiar(linhas.join("\n"), `Lista de ${Gt(linhas.length, "foco", "focos")}`);
+  }
   let data = new Date().toISOString().slice(0, 10);
   if (formato === "json") {
     let obj = { versao: t.versao || "", exportado_em: data, areas: areas.map(a => ({ nome: a.nome, subareas: a.subareas.map(s => ({ nome: s.nome, focos: [...s.focos] })) })) };
@@ -2596,7 +2638,7 @@ async function mfExportarFocos(formato) {
 }
 function mfLigarExportacao(raiz) { raiz.addEventListener("click", e => { let b = e.target.closest("[data-exportar]"); b && mfExportarFocos(b.dataset.exportar); }); }
 function mfBotoesExportar() {
-  return O`<div class="flex flex-wrap gap-2"><button type="button" class="btn btn-outline btn-sm" data-exportar="csv"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar CSV</button><button type="button" class="btn btn-outline btn-sm" data-exportar="json"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar JSON</button></div>`;
+  return O`<div class="flex flex-wrap gap-2"><button type="button" class="btn btn-outline btn-sm" data-exportar="csv"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar CSV</button><button type="button" class="btn btn-outline btn-sm" data-exportar="json"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar JSON</button><button type="button" class="btn btn-outline btn-sm" data-exportar="copiar"><i data-lucide="copy" class="h-4 w-4" aria-hidden="true"></i>Copiar todos os focos</button></div>`;
 }
 
 // ── Comentário da questão dividido por alternativa (A → A, B → B…) ──
@@ -3133,7 +3175,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
         <span class="w-36 shrink-0 font-semibold">${v.instituicao} ${v.ano} · Q${v.numero}</span>
         <span class="min-w-0 flex-1 truncate">${Vt(v.area)} <span class="muted ml-1 text-xs">${v.foco}</span></span>
         <span class="muted hidden shrink-0 text-xs sm:inline">${v.marcada==="§"?"Discursiva · autoavaliada":(v.marcada?"Marcada "+v.marcada:"\u2014")+" · Gabarito "+(v.gabarito||"\u2014")}</span>
-        <span class="w-16 shrink-0 text-right font-semibold">${d(v.c)}</span></button></li>`):O`<li class="muted py-6 text-center text-sm">Nenhuma questão neste filtro.</li>`}`),window.lucide&&window.lucide.createIcons()}p(),r.addEventListener("click",async m=>{let v=m.target.closest("[data-f]");if(v)return l=v.dataset.f,r.querySelectorAll("[data-f]").forEach(A=>{let N=A===v;A.classList.toggle("btn-primary",N),A.classList.toggle("btn-outline",!N),A.setAttribute("aria-pressed",N)}),p();let _=m.target.closest("[data-abrir]");if(_)return sessionStorage.setItem("bq_fila",JSON.stringify({ids:B().map(A=>A.id),origem:"#/relatorio/"+n.sessaoId})),t("#/q/"+encodeURIComponent(_.dataset.abrir));if(m.target.closest("#b-refazer")){let A=m.target.closest("#b-refazer");A.disabled=!0;try{let N=await ge("iniciarSessao",{refazerDe:n.sessaoId,modo:"imediato"});t("#/sessao/"+N.sessaoId)}catch(N){be(N.message,"erro"),A.disabled=!1}}})}var $g={};xn($g,{render:()=>WA});var $A=["Cl\xEDnica M\xE9dica","Cirurgia Geral","Ginecologia e Obstetr\xEDcia","Pediatria","Preventiva","Radiologia"],KB=["A","B","C","D","E"],Ft=r=>r==null?"":String(r).trim();function Zv(r){let e={};return r.areas.forEach(t=>t.subareas.forEach(n=>{e[t.nome+"|"+n.nome]=new Set(n.focos)})),e}function JA(r,e,t,n){if(!$A.includes(e))return`\xC1rea inv\xE1lida: "${e}"`;let s=r[e+"|"+t];return s?s.has(n)?null:`Foco "${n}" n\xE3o existe em "${e} \u203A ${t}"`:`Sub\xE1rea "${t}" n\xE3o existe em "${e}"`}function zA(r,e){if(!r||typeof r!="object"||Array.isArray(r))return"Quest\xE3o inv\xE1lida (n\xE3o \xE9 um objeto).";let t=Number(r.numero);if(!Number.isInteger(t)||t<1)return'Campo "numero" deve ser um inteiro positivo.';let n=JA(e,Ft(r.area),Ft(r.subarea),Ft(r.foco));if(n)return n;if(!Ft(r.enunciado))return"Enunciado vazio.";let s=r.alternativas===void 0||r.alternativas===null?[]:r.alternativas;if(!Array.isArray(s)||s.length&&(s.length<4||s.length>5))return"Use 4 ou 5 alternativas (ou nenhuma, em quest\xE3o discursiva).";let i=r.imagens===void 0||r.imagens===null?[]:r.imagens;if(!Array.isArray(i))return'Campo "imagens" deve ser uma lista.';let a=["enunciado","comentario",...s.map((u,l)=>"alternativa_"+KB[l])];for(let u=0;u<i.length;u++){let l=i[u]||{};if(!Ft(l.arquivo))return`Imagem ${u+1} sem "arquivo".`;if(!a.includes(Ft(l.posicao)))return`Imagem "${Ft(l.arquivo)}": posi\xE7\xE3o inv\xE1lida "${Ft(l.posicao)}".`}for(let u=0;u<s.length;u++){let l=s[u]||{},B=Ft(l.letra).toUpperCase();if(B!==KB[u])return`Alternativas devem estar em ordem (esperado "${KB[u]}", veio "${B}").`;if(!Ft(l.texto)&&!i.some(d=>Ft(d.posicao)==="alternativa_"+B))return`Alternativa ${B} vazia (sem texto nem imagem).`}return!(r.anulada===!0||r.anulada==="true"||r.anulada===1)&&s.length&&!s.some((u,l)=>KB[l]===Ft(r.gabarito).toUpperCase())?`Gabarito "${Ft(r.gabarito).toUpperCase()}" n\xE3o corresponde a uma alternativa.`:null}function ew(r,e){let t={erroGeral:null,prova:null,total:0,validas:0,erros:[],imagens:[]};if(!r||typeof r!="object")return t.erroGeral="O arquivo n\xE3o cont\xE9m um objeto JSON.",t;let n=r.prova||{};if(!Ft(n.instituicao))return t.erroGeral="prova.instituicao \xE9 obrigat\xF3rio.",t;if(!Number.isInteger(Number(n.ano))||Number(n.ano)<1950||Number(n.ano)>2100)return t.erroGeral="prova.ano inv\xE1lido.",t;if(!Array.isArray(r.questoes)||!r.questoes.length)return t.erroGeral='Lista "questoes" vazia ou ausente.',t;t.prova={instituicao:Ft(n.instituicao),ano:Number(n.ano),nome:Ft(n.nome),id:Ft(n.id)},t.total=r.questoes.length;let s=new Set;return r.questoes.forEach((i,a)=>{let o=zA(i,e);if(o){t.erros.push({linha:a+1,numero:i&&i.numero,id:i&&i.id,motivo:o});return}if(s.has(Number(i.numero))){t.erros.push({linha:a+1,numero:i.numero,id:i.id,motivo:`N\xFAmero ${i.numero} repetido no mesmo arquivo.`});return}s.add(Number(i.numero)),t.validas++,(i.imagens||[]).forEach(u=>t.imagens.push(Ft(u.arquivo)))}),t}var tw=40,jg=1572864,KA={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",svg:"image/svg+xml"},QB=r=>KA[r.toLowerCase().split(".").pop()||""]||null;function QA(r){let e=new Uint8Array(r),t="";for(let n=0;n<e.length;n+=32768)t+=String.fromCharCode.apply(null,e.subarray(n,n+32768));return btoa(t)}async function WA(r){let e=Zv(Ee.taxonomia),t=null,n=!1;r.innerHTML=String(O`
+        <span class="w-16 shrink-0 text-right font-semibold">${d(v.c)}</span></button></li>`):O`<li class="muted py-6 text-center text-sm">Nenhuma questão neste filtro.</li>`}`),window.lucide&&window.lucide.createIcons()}p(),r.addEventListener("click",async m=>{let v=m.target.closest("[data-f]");if(v)return l=v.dataset.f,r.querySelectorAll("[data-f]").forEach(A=>{let N=A===v;A.classList.toggle("btn-primary",N),A.classList.toggle("btn-outline",!N),A.setAttribute("aria-pressed",N)}),p();let _=m.target.closest("[data-abrir]");if(_)return sessionStorage.setItem("bq_fila",JSON.stringify({ids:B().map(A=>A.id),origem:"#/relatorio/"+n.sessaoId})),t("#/q/"+encodeURIComponent(_.dataset.abrir));if(m.target.closest("#b-refazer")){let A=m.target.closest("#b-refazer");A.disabled=!0;try{let N=await ge("iniciarSessao",{refazerDe:n.sessaoId,modo:"imediato"});t("#/sessao/"+N.sessaoId)}catch(N){be(N.message,"erro"),A.disabled=!1}}})}var $g={};xn($g,{render:()=>WA});var $A=["Cl\xEDnica M\xE9dica","Cirurgia Geral","Ginecologia e Obstetr\xEDcia","Pediatria","Preventiva","Radiologia"],KB=["A","B","C","D","E"],Ft=r=>r==null?"":String(r).trim();function Zv(r){let e={};return r.areas.forEach(t=>t.subareas.forEach(n=>{e[t.nome+"|"+n.nome]=new Set(n.focos)})),e}function JA(r,e,t,n){if(!$A.includes(e))return`\xC1rea inv\xE1lida: "${e}"`;let s=r[e+"|"+t];return s?s.has(n)?null:`Foco "${n}" n\xE3o existe em "${e} \u203A ${t}"`:`Sub\xE1rea "${t}" n\xE3o existe em "${e}"`}function zA(r,e){if(!r||typeof r!="object"||Array.isArray(r))return"Quest\xE3o inv\xE1lida (n\xE3o \xE9 um objeto).";let t=Number(r.numero);if(!Number.isInteger(t)||t<1)return'Campo "numero" deve ser um inteiro positivo.';if(!$A.includes(Ft(r.area)))return`\xC1rea inv\xE1lida: "${Ft(r.area)}"`;if(!Ft(r.subarea)||!Ft(r.foco))return'Informe "subarea" e "foco".';if(Ft(r.subarea).length>120||Ft(r.foco).length>120)return'"subarea" e "foco" aceitam no m\xE1ximo 120 caracteres.';if(!Ft(r.enunciado))return"Enunciado vazio.";let s=r.alternativas===void 0||r.alternativas===null?[]:r.alternativas;if(!Array.isArray(s)||s.length&&(s.length<4||s.length>5))return"Use 4 ou 5 alternativas (ou nenhuma, em quest\xE3o discursiva).";let i=r.imagens===void 0||r.imagens===null?[]:r.imagens;if(!Array.isArray(i))return'Campo "imagens" deve ser uma lista.';let a=["enunciado","comentario",...s.map((u,l)=>"alternativa_"+KB[l])];for(let u=0;u<i.length;u++){let l=i[u]||{};if(!Ft(l.arquivo))return`Imagem ${u+1} sem "arquivo".`;if(!a.includes(Ft(l.posicao)))return`Imagem "${Ft(l.arquivo)}": posi\xE7\xE3o inv\xE1lida "${Ft(l.posicao)}".`}for(let u=0;u<s.length;u++){let l=s[u]||{},B=Ft(l.letra).toUpperCase();if(B!==KB[u])return`Alternativas devem estar em ordem (esperado "${KB[u]}", veio "${B}").`;if(!Ft(l.texto)&&!i.some(d=>Ft(d.posicao)==="alternativa_"+B))return`Alternativa ${B} vazia (sem texto nem imagem).`}return!(r.anulada===!0||r.anulada==="true"||r.anulada===1)&&s.length&&!s.some((u,l)=>KB[l]===Ft(r.gabarito).toUpperCase())?`Gabarito "${Ft(r.gabarito).toUpperCase()}" n\xE3o corresponde a uma alternativa.`:null}function ew(r,e){let t={erroGeral:null,prova:null,total:0,validas:0,erros:[],imagens:[],novos:[]};if(!r||typeof r!="object")return t.erroGeral="O arquivo n\xE3o cont\xE9m um objeto JSON.",t;let n=r.prova||{};if(!Ft(n.instituicao))return t.erroGeral="prova.instituicao \xE9 obrigat\xF3rio.",t;if(!Number.isInteger(Number(n.ano))||Number(n.ano)<1950||Number(n.ano)>2100)return t.erroGeral="prova.ano inv\xE1lido.",t;if(!Array.isArray(r.questoes)||!r.questoes.length)return t.erroGeral='Lista "questoes" vazia ou ausente.',t;t.prova={instituicao:Ft(n.instituicao),ano:Number(n.ano),nome:Ft(n.nome),id:Ft(n.id)},t.total=r.questoes.length;let s=new Set;return r.questoes.forEach((i,a)=>{let o=zA(i,e);if(o){t.erros.push({linha:a+1,numero:i&&i.numero,id:i&&i.id,motivo:o});return}if(s.has(Number(i.numero))){t.erros.push({linha:a+1,numero:i.numero,id:i.id,motivo:`N\xFAmero ${i.numero} repetido no mesmo arquivo.`});return}s.add(Number(i.numero)),t.validas++,mfNotarFocoNovo(e,i,t),(i.imagens||[]).forEach(u=>t.imagens.push(Ft(u.arquivo)))}),t}var tw=40,jg=1572864,KA={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",svg:"image/svg+xml"},QB=r=>KA[r.toLowerCase().split(".").pop()||""]||null;function QA(r){let e=new Uint8Array(r),t="";for(let n=0;n<e.length;n+=32768)t+=String.fromCharCode.apply(null,e.subarray(n,n+32768));return btoa(t)}async function WA(r){await mfAtualizarTax();let e=Zv(Ee.taxonomia),t=null,n=!1;r.innerHTML=String(O`
   <h1 class="h1">Importar questões</h1>
   <p class="muted mt-1 max-w-2xl text-sm">Envie um ou vários arquivos <code>.json</code>, ou um <code>.zip</code> com o JSON e a pasta <code>imagens/</code>. A importação é <strong>aditiva</strong>: nada que já existe é apagado, e questões repetidas (mesma instituição + ano + número) são ignoradas.</p>
 
@@ -3143,26 +3185,28 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
     <label class="btn btn-primary cursor-pointer focus-within:ring-2 focus-within:ring-brand">Escolher arquivos<input id="arquivos" type="file" multiple accept=".json,.zip,image/png,image/jpeg,image/gif,image/webp,image/svg+xml" class="sr-only"></label>
     <button type="button" class="btn btn-ghost btn-sm" id="b-exemplo"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Baixar arquivo de exemplo (.json)</button>
     <p class="muted w-full text-xs">Quest\xF5es discursivas (sem alternativas, como as da Unicamp): use <code>"alternativas": []</code>, escreva a resposta esperada em <code>"gabarito"</code> (texto) e o racioc\xEDnio em <code>"comentario"</code>.</p>
+    <p class="muted w-full text-xs">Se o <code>foco</code> (ou a <code>subarea</code>) de uma quest\xE3o ainda n\xE3o existir no site, ele \xE9 criado automaticamente ao importar. A <code>area</code> precisa ser uma das \xE1reas existentes.</p>
+    <button type="button" class="btn btn-ghost btn-sm" data-exportar="copiar"><i data-lucide="copy" class="h-4 w-4" aria-hidden="true"></i>Copiar lista de focos</button>
   </div>
-  <div id="area" class="mt-6" aria-live="polite"></div>`);let s=_=>r.querySelector(_),i=s("#area");async function a(_){let A=[],N=new Map,K=[],$=async(z,q)=>{let Q;try{Q=JSON.parse(z)}catch(w){K.push(`${q}: JSON inv\xE1lido (${w.message})`);return}if(!Q||typeof Q!="object"||Q.questoes===void 0&&Q.prova===void 0){K.push(`${q}: ignorado (n\xE3o parece um arquivo de quest\xF5es).`);return}A.push({origem:q,doc:Q,val:ew(Q,e)})};for(let z of _){let q=z.name.toLowerCase();if(q.endsWith(".json"))await $(await z.text(),z.name);else if(q.endsWith(".zip")){if(!window.JSZip){K.push(`${z.name}: a biblioteca JSZip n\xE3o carregou (verifique a internet).`);continue}try{let Q=await window.JSZip.loadAsync(z);for(let[w,y]of Object.entries(Q.files)){let g=w.split("/").pop();y.dir||w.startsWith("__MACOSX/")||g.startsWith("._")||(w.toLowerCase().endsWith(".json")?await $(await y.async("string"),`${z.name} \u203A ${w}`):QB(w)&&N.set(w.toLowerCase().replace(/\\/g,"/"),{nome:w,mime:QB(w),obter:()=>y.async("arraybuffer")}))}}catch(Q){K.push(`${z.name}: n\xE3o foi poss\xEDvel abrir o zip (${Q.message}).`)}}else QB(q)?N.set(q,{nome:z.name,mime:QB(q),obter:()=>z.arrayBuffer()}):K.push(`${z.name}: tipo de arquivo n\xE3o suportado.`)}return{docs:A,imagens:N,problemas:K}}function o(_,A){let N=String(A).toLowerCase().replace(/\\/g,"/").replace(/^\.?\//,"");if(_.has(N))return _.get(N);if(_.has("imagens/"+N))return _.get("imagens/"+N);for(let[$,z]of _)if($.endsWith("/"+N))return z;let K=N.split("/").pop();for(let[$,z]of _)if($.split("/").pop()===K)return z;return null}function u(){let{docs:_,imagens:A,problemas:N}=t,K=_.filter(z=>!z.val.erroGeral),$=K.reduce((z,q)=>z+q.val.validas,0);i.innerHTML=String(O`
+  <div id="area" class="mt-6" aria-live="polite"></div>`);mfLigarExportacao(r);let s=_=>r.querySelector(_),i=s("#area");async function a(_){let A=[],N=new Map,K=[],$=async(z,q)=>{let Q;try{Q=JSON.parse(z)}catch(w){K.push(`${q}: JSON inv\xE1lido (${w.message})`);return}if(!Q||typeof Q!="object"||Q.questoes===void 0&&Q.prova===void 0){K.push(`${q}: ignorado (n\xE3o parece um arquivo de quest\xF5es).`);return}A.push({origem:q,doc:Q,val:ew(Q,e)})};for(let z of _){let q=z.name.toLowerCase();if(q.endsWith(".json"))await $(await z.text(),z.name);else if(q.endsWith(".zip")){if(!window.JSZip){K.push(`${z.name}: a biblioteca JSZip n\xE3o carregou (verifique a internet).`);continue}try{let Q=await window.JSZip.loadAsync(z);for(let[w,y]of Object.entries(Q.files)){let g=w.split("/").pop();y.dir||w.startsWith("__MACOSX/")||g.startsWith("._")||(w.toLowerCase().endsWith(".json")?await $(await y.async("string"),`${z.name} \u203A ${w}`):QB(w)&&N.set(w.toLowerCase().replace(/\\/g,"/"),{nome:w,mime:QB(w),obter:()=>y.async("arraybuffer")}))}}catch(Q){K.push(`${z.name}: n\xE3o foi poss\xEDvel abrir o zip (${Q.message}).`)}}else QB(q)?N.set(q,{nome:z.name,mime:QB(q),obter:()=>z.arrayBuffer()}):K.push(`${z.name}: tipo de arquivo n\xE3o suportado.`)}return{docs:A,imagens:N,problemas:K}}function o(_,A){let N=String(A).toLowerCase().replace(/\\/g,"/").replace(/^\.?\//,"");if(_.has(N))return _.get(N);if(_.has("imagens/"+N))return _.get("imagens/"+N);for(let[$,z]of _)if($.endsWith("/"+N))return z;let K=N.split("/").pop();for(let[$,z]of _)if($.split("/").pop()===K)return z;return null}function u(){let{docs:_,imagens:A,problemas:N}=t,K=_.filter(z=>!z.val.erroGeral),$=K.reduce((z,q)=>z+q.val.validas,0);i.innerHTML=String(O`
       ${N.length?O`<div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" role="alert"><ul class="list-disc pl-5">${N.map(z=>O`<li>${z}</li>`)}</ul></div>`:""}
       <ul class="space-y-3">${_.map(z=>{let q=z.val,Q=[...new Set(q.imagens)].filter(w=>!o(A,w));return O`<li class="card">
           <div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold">${q.prova?`${q.prova.instituicao} ${q.prova.ano}`:z.origem}</p><span class="muted text-xs">${z.origem}</span></div>
           ${q.erroGeral?O`<p class="mt-2 text-sm font-medium text-rose-600">${q.erroGeral}</p>`:O`
             <p class="mt-1 text-sm">${Gt(q.total,"quest\xE3o","quest\xF5es")} no arquivo · <span class="text-emerald-700 dark:text-emerald-400">${q.validas} válidas</span>${q.erros.length?O` · <span class="text-rose-600">${q.erros.length} com erro</span>`:""}</p>
-            ${q.imagens.length?O`<p class="muted mt-1 text-xs">Imagens referenciadas: ${new Set(q.imagens).size} · encontradas: ${new Set(q.imagens).size-Q.length}${Q.length?O` · <span class="font-medium text-amber-700 dark:text-amber-400">faltando: ${Q.join(", ")}</span>`:""}</p>`:""}
+            ${q.novos.length?O`<details class="mt-1"><summary class="cursor-pointer text-sm font-medium text-sky-700 dark:text-sky-300">Focos novos que ser\xE3o criados (${q.novos.length})</summary><ul class="mt-2 max-h-40 list-disc space-y-1 overflow-auto pl-5 text-xs">${q.novos.map(w=>O`<li>${w.area} \u203A ${w.subarea} \u203A ${w.foco}</li>`)}</ul></details>`:""}${q.imagens.length?O`<p class="muted mt-1 text-xs">Imagens referenciadas: ${new Set(q.imagens).size} · encontradas: ${new Set(q.imagens).size-Q.length}${Q.length?O` · <span class="font-medium text-amber-700 dark:text-amber-400">faltando: ${Q.join(", ")}</span>`:""}</p>`:""}
             ${q.erros.length?O`<details class="mt-2"><summary class="cursor-pointer text-sm font-medium text-rose-600">Ver erros (${q.erros.length})</summary><ul class="mt-2 max-h-48 list-disc space-y-1 overflow-auto pl-5 text-xs">${q.erros.slice(0,100).map(w=>O`<li>Linha ${w.linha}${w.numero?` (quest\xE3o ${w.numero})`:""}: ${w.motivo}</li>`)}</ul></details>`:""}`}
         </li>`})}</ul>
       <div class="mt-5 flex flex-wrap items-center gap-3">
         <button type="button" class="btn btn-primary" id="b-importar" ${K.length?"":ot("disabled")}>Importar ${Gt($,"quest\xE3o v\xE1lida","quest\xF5es v\xE1lidas")}</button>
         <button type="button" class="btn btn-ghost" id="b-cancelar">Limpar</button>
         <p class="muted text-xs">O servidor valida de novo e tem a palavra final; erros aparecem no relatório.</p>
-      </div>`)}async function l(){n=!0;let{docs:_,imagens:A}=t,N=_.filter(w=>!w.val.erroGeral),K=N.reduce((w,y)=>w+y.doc.questoes.length,0),$={importadas:0,duplicadas:[],erros:[],avisos:[],falhas:[],upload:new Map,imgOk:0,imgFalta:[],imgFalha:[]};i.innerHTML=String(O`
+      </div>`)}async function l(){n=!0;let{docs:_,imagens:A}=t,N=_.filter(w=>!w.val.erroGeral),K=N.reduce((w,y)=>w+y.doc.questoes.length,0),$={importadas:0,duplicadas:[],erros:[],avisos:[],falhas:[],focosNovos:[],upload:new Map,imgOk:0,imgFalta:[],imgFalha:[]};i.innerHTML=String(O`
       <div class="card space-y-5">
         <div><p class="mb-1 text-sm font-semibold" id="p1-t">Enviando questões…</p><div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="p1"><div class="h-full w-0 rounded-full bg-brand transition-all" id="p1-b"></div></div></div>
         <div id="bloco2" class="hidden"><p class="mb-1 text-sm font-semibold" id="p2-t">Enviando imagens…</p><div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="p2"><div class="h-full w-0 rounded-full bg-brand transition-all" id="p2-b"></div></div></div>
         <p class="muted text-xs">Não feche esta página até terminar. Se algo falhar, é seguro repetir a importação: duplicatas são ignoradas.</p>
-      </div>`);let z=(w,y,g,E)=>{let D=g?Math.round(y/g*100):100;s(`#${w}-b`).style.width=D+"%",s(`#${w}`).setAttribute("aria-valuenow",D),E&&(s(`#${w}-t`).textContent=E)},q=0;for(let w of N){let y=w.doc.questoes,g=w.val.prova.instituicao+" "+w.val.prova.ano;for(let E=0;E<y.length;E+=tw){let D=y.slice(E,E+tw);try{let T=await ge("importarLote",{prova:w.doc.prova,questoes:D,offset:E});$.importadas+=T.importadas,T.duplicadas.forEach(b=>$.duplicadas.push({...b,arquivo:g})),T.erros.forEach(b=>$.erros.push({...b,arquivo:g})),T.avisos.forEach(b=>$.avisos.push({...b,arquivo:g})),T.paraUpload.forEach(b=>$.upload.set(b.questaoId+"|"+b.arquivo,{...b,arquivoJson:w.origem}))}catch(T){$.falhas.push({arquivo:g,de:E+1,ate:E+D.length,motivo:T.message})}q+=D.length,z("p1",q,K,`Enviando quest\xF5es\u2026 ${q}/${K}`)}}z("p1",K,K,`Quest\xF5es enviadas: ${K}/${K}`);let Q=[...$.upload.values()];if(Q.length){s("#bloco2").classList.remove("hidden");let w=0,y=async E=>{let D=o(A,E.arquivo);if(!D){$.imgFalta.push(E);return}try{let T=await D.obter(),b=D.mime;(window.CONFIG||{}).FIREBASE&&({buf:T,mime:b}=await YA(T,b));let fe=Math.max(1,Math.ceil(T.byteLength/jg)),Ne=crypto.randomUUID().replace(/-/g,"");for(let et=0;et<fe;et++){let Ie=T.slice(et*jg,(et+1)*jg);await ge("uploadImagem",{questaoId:E.questaoId,arquivo:E.arquivo,mime:b,dados:QA(Ie),parte:et,totalPartes:fe,uploadId:Ne})}$.imgOk++}catch(T){$.imgFalha.push({...E,motivo:T.message})}},g=Array.from({length:2},async()=>{for(;Q.length;)await y(Q.shift()),w++,z("p2",w,$.upload.size,`Enviando imagens\u2026 ${w}/${$.upload.size}`)});await Promise.all(g),z("p2",$.upload.size,$.upload.size,`Imagens processadas: ${$.upload.size}`)}n=!1,d($,N)}function B(_){let A=[`Relat\xF3rio de importa\xE7\xE3o \u2014 ${new Date().toLocaleString("pt-BR")}`,"",`Quest\xF5es importadas: ${_.importadas}`,`Duplicadas ignoradas: ${_.duplicadas.length}`,`Erros de valida\xE7\xE3o: ${_.erros.length}`,`Blocos que falharam: ${_.falhas.length}`,`Imagens enviadas: ${_.imgOk}`,`Imagens n\xE3o encontradas: ${_.imgFalta.length}`,`Imagens com falha: ${_.imgFalha.length}`,""];return _.erros.forEach(N=>A.push(`ERRO  [${N.arquivo}] linha ${N.linha}${N.numero?` (quest\xE3o ${N.numero})`:""}: ${N.motivo}`)),_.falhas.forEach(N=>A.push(`FALHA [${N.arquivo}] linhas ${N.de}-${N.ate}: ${N.motivo}`)),_.duplicadas.forEach(N=>A.push(`DUPLICADA [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}) \u2014 j\xE1 existe como ${N.id}`)),_.avisos.forEach(N=>A.push(`AVISO [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}): ${N.motivo}`)),_.imgFalta.forEach(N=>A.push(`IMAGEM N\xC3O ENCONTRADA: ${N.arquivo} (quest\xE3o ${N.questaoId})`)),_.imgFalha.forEach(N=>A.push(`IMAGEM COM FALHA: ${N.arquivo} (quest\xE3o ${N.questaoId}): ${N.motivo}`)),A.join(`
+      </div>`);let z=(w,y,g,E)=>{let D=g?Math.round(y/g*100):100;s(`#${w}-b`).style.width=D+"%",s(`#${w}`).setAttribute("aria-valuenow",D),E&&(s(`#${w}-t`).textContent=E)},q=0;for(let w of N){let y=w.doc.questoes,g=w.val.prova.instituicao+" "+w.val.prova.ano;for(let E=0;E<y.length;E+=tw){let D=y.slice(E,E+tw);try{let T=await ge("importarLote",{prova:w.doc.prova,questoes:D,offset:E});$.importadas+=T.importadas,(T.focosNovos||[]).forEach(b=>$.focosNovos.push(b)),T.duplicadas.forEach(b=>$.duplicadas.push({...b,arquivo:g})),T.erros.forEach(b=>$.erros.push({...b,arquivo:g})),T.avisos.forEach(b=>$.avisos.push({...b,arquivo:g})),T.paraUpload.forEach(b=>$.upload.set(b.questaoId+"|"+b.arquivo,{...b,arquivoJson:w.origem}))}catch(T){$.falhas.push({arquivo:g,de:E+1,ate:E+D.length,motivo:T.message})}q+=D.length,z("p1",q,K,`Enviando quest\xF5es\u2026 ${q}/${K}`)}}z("p1",K,K,`Quest\xF5es enviadas: ${K}/${K}`);let Q=[...$.upload.values()];if(Q.length){s("#bloco2").classList.remove("hidden");let w=0,y=async E=>{let D=o(A,E.arquivo);if(!D){$.imgFalta.push(E);return}try{let T=await D.obter(),b=D.mime;(window.CONFIG||{}).FIREBASE&&({buf:T,mime:b}=await YA(T,b));let fe=Math.max(1,Math.ceil(T.byteLength/jg)),Ne=crypto.randomUUID().replace(/-/g,"");for(let et=0;et<fe;et++){let Ie=T.slice(et*jg,(et+1)*jg);await ge("uploadImagem",{questaoId:E.questaoId,arquivo:E.arquivo,mime:b,dados:QA(Ie),parte:et,totalPartes:fe,uploadId:Ne})}$.imgOk++}catch(T){$.imgFalha.push({...E,motivo:T.message})}},g=Array.from({length:2},async()=>{for(;Q.length;)await y(Q.shift()),w++,z("p2",w,$.upload.size,`Enviando imagens\u2026 ${w}/${$.upload.size}`)});await Promise.all(g),z("p2",$.upload.size,$.upload.size,`Imagens processadas: ${$.upload.size}`)}n=!1,mfAtualizarTax(),d($,N)}function B(_){let A=[`Relat\xF3rio de importa\xE7\xE3o \u2014 ${new Date().toLocaleString("pt-BR")}`,"",`Quest\xF5es importadas: ${_.importadas}`,`Duplicadas ignoradas: ${_.duplicadas.length}`,`Erros de valida\xE7\xE3o: ${_.erros.length}`,`Blocos que falharam: ${_.falhas.length}`,`Imagens enviadas: ${_.imgOk}`,`Imagens n\xE3o encontradas: ${_.imgFalta.length}`,`Imagens com falha: ${_.imgFalha.length}`,`Focos novos adicionados: ${_.focosNovos.length}`,""];return _.focosNovos.forEach(N=>A.push(`FOCO NOVO: ${N.area} \u203A ${N.subarea} \u203A ${N.foco}`)),_.erros.forEach(N=>A.push(`ERRO  [${N.arquivo}] linha ${N.linha}${N.numero?` (quest\xE3o ${N.numero})`:""}: ${N.motivo}`)),_.falhas.forEach(N=>A.push(`FALHA [${N.arquivo}] linhas ${N.de}-${N.ate}: ${N.motivo}`)),_.duplicadas.forEach(N=>A.push(`DUPLICADA [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}) \u2014 j\xE1 existe como ${N.id}`)),_.avisos.forEach(N=>A.push(`AVISO [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}): ${N.motivo}`)),_.imgFalta.forEach(N=>A.push(`IMAGEM N\xC3O ENCONTRADA: ${N.arquivo} (quest\xE3o ${N.questaoId})`)),_.imgFalha.forEach(N=>A.push(`IMAGEM COM FALHA: ${N.arquivo} (quest\xE3o ${N.questaoId}): ${N.motivo}`)),A.join(`
 `)}function d(_,A){let N=!_.erros.length&&!_.falhas.length&&!_.imgFalta.length&&!_.imgFalha.length,K=($,z,q)=>z.length?O`<details class="mt-3"><summary class="cursor-pointer text-sm font-medium ${q}">${$} (${z.length})</summary><ul class="mt-2 max-h-56 list-disc space-y-1 overflow-auto pl-5 text-xs">${z.slice(0,300).map(Q=>O`<li>${Q}</li>`)}</ul></details>`:"";i.innerHTML=String(O`
     <section class="card" aria-labelledby="t-rel">
       <h2 id="t-rel" class="flex items-center gap-2 text-base font-semibold"><i data-lucide="${N?"circle-check":"triangle-alert"}" class="h-5 w-5 ${N?"text-emerald-600":"text-amber-600"}" aria-hidden="true"></i>Importação concluída${N?"":" com pend\xEAncias"}</h2>
@@ -3170,6 +3214,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
       ${K("Erros de valida\xE7\xE3o",_.erros.map($=>`[${$.arquivo}] linha ${$.linha}${$.numero?` (quest\xE3o ${$.numero})`:""}: ${$.motivo}`),"text-rose-600")}
       ${K("Blocos que falharam (repita a importa\xE7\xE3o)",_.falhas.map($=>`[${$.arquivo}] linhas ${$.de}\u2013${$.ate}: ${$.motivo}`),"text-rose-600")}
       ${K("Imagens n\xE3o encontradas no zip",_.imgFalta.map($=>`${$.arquivo} (quest\xE3o ${$.questaoId})`),"text-amber-700 dark:text-amber-400")}
+      ${K("Focos novos adicionados ao site",_.focosNovos.map($=>`${$.area} \u203A ${$.subarea} \u203A ${$.foco}`),"text-sky-700 dark:text-sky-300")}
       ${K("Imagens com falha no envio",_.imgFalha.map($=>`${$.arquivo} (quest\xE3o ${$.questaoId}): ${$.motivo}`),"text-amber-700 dark:text-amber-400")}
       ${K("Duplicadas ignoradas",_.duplicadas.map($=>`[${$.arquivo}] linha ${$.linha}: quest\xE3o ${$.numero} j\xE1 existe (${$.id})`),"muted")}
       ${K("Avisos",_.avisos.map($=>`[${$.arquivo}] linha ${$.linha} (quest\xE3o ${$.numero}): ${$.motivo}`),"muted")}
@@ -3202,7 +3247,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
     <div id="app-corpo" class="mt-2"></div>
   </section>
 
-  <section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Exportar focos</h2><p class="muted mt-1 text-xs">Lista de todos os focos disponíveis: Área → Subárea → Foco. O CSV usa ponto e vírgula e abre direto no Excel.</p></div>${mfBotoesExportar()}</section>
+  <section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Exportar focos</h2><p class="muted mt-1 text-xs">Lista de todos os focos disponíveis: Área → Subárea → Foco. O CSV usa ponto e vírgula e abre direto no Excel. "Copiar" coloca a lista na área de transferência (uma linha por foco, separada por tabulação).</p></div>${mfBotoesExportar()}</section>
   ${mfAdmin()?O`<section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Focos e classificação</h2><p class="muted mt-1 text-xs">Adicionar, renomear e remover focos e subáreas (somente usuário 02).</p></div><a href="#/taxonomia" class="btn btn-outline"><i data-lucide="tag" class="h-4 w-4" aria-hidden="true"></i>Abrir</a></section>`:""}
   <section class="card mt-5">
     <h2 class="text-sm font-semibold">Nomes das provas</h2>
