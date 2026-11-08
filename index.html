@@ -1515,7 +1515,6 @@ function taxonomiaUso_(u) {
 }
 
 function taxAdicionarFoco_(u, p) {
-  exigirAdmin_(u);
   var foco = str_(p.foco).slice(0, 120);
   if (!foco) throw erro_('Informe o nome do foco.');
   return comLock_(function () {
@@ -1593,7 +1592,6 @@ function taxRemoverFoco_(u, p) {
 }
 
 function recategorizarQuestao_(u, p) {
-  exigirAdmin_(u);
   var id = str_(p.id), area = str_(p.area), sub = str_(p.subarea), foco = str_(p.foco);
   var e = erroTaxonomia_(area, sub, foco);
   if (e) throw erro_(e);
@@ -2046,7 +2044,7 @@ function mfLigarTax(raiz, v = {}) {
   let porSub = () => {
     let sub = mfSubareas(a.value).find(x => x.nome === s.value);
     opcoes(f, sub ? sub.focos : [], v.foco);
-    mfAdmin() && f.insertAdjacentHTML("beforeend", '<option value="__novo__">➕ Criar novo foco…</option>');
+    f.insertAdjacentHTML("beforeend", '<option value="__novo__">➕ Criar novo foco…</option>');
     mostrarNovo();
   };
   f.addEventListener("change", mostrarNovo);
@@ -2993,7 +2991,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
         </div>
         <div class="flex items-center gap-1">
           ${window.top!==window?ot('<button type="button" id="b-env" class="mr-1 inline-flex items-center gap-2 rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700" title="Enviar esta questão para as Notas da Rotina"><i data-lucide="send" class="h-4 w-4" aria-hidden="true"></i><span>Enviar para Notas</span></button>'):""}
-          ${mfAdmin()?Gn("b-recat","tag","Recategorizar quest\xE3o",null):""}
+          ${Gn("b-recat","tag","Recategorizar quest\xE3o",null)}
           ${Gn("b-rep","triangle-alert","Reportar problema nesta quest\xE3o",null)}
           ${Gn("b-fav","heart",l.has(V)?"Remover dos favoritos":"Favoritar",l.has(V)?"true":"false",l.has(V)?"fill-current text-rose-500":"")}
           ${O`<button type="button" id="b-nota" class="relative flex h-9 w-9 items-center justify-center rounded-full text-brand hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800" aria-label="Anotação e revisão" title="Anotação e revisão"><i data-lucide="pencil" class="h-5 w-5" aria-hidden="true"></i>${ji||B.has(V)?O`<span class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-sky-500 ring-2 ring-white dark:ring-slate-900"></span>`:""}</button>`}
