@@ -2601,6 +2601,152 @@ function mfDisc({ feito, ans, rev, txt, res, env }) {
       <button type="button" id="b-disc-resp" class="rounded-full bg-brand px-8 py-3 text-sm font-bold text-white transition-opacity hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" ${env ? ot("disabled") : ""}>Responder</button></div></div>`;
 }
 
+// ───────── Impressão de questões (trilhas e filtros) e seletor de várias provas ─────────
+var MF_CSS_IMPRESSAO = `#print-root{display:none}
+@media print{
+@page{size:A4;margin:14mm 12mm}
+html,body{background:#fff!important;color:#000!important}
+body>*:not(#print-root){display:none!important}
+#print-root{display:block!important;font:11pt/1.45 Arial,Helvetica,sans-serif;color:#000}
+#print-root *{color:#000!important;background:transparent!important;box-shadow:none!important}
+#print-root .ph{border-bottom:1.5pt solid #000;margin-bottom:12pt;padding-bottom:6pt}
+#print-root h1{font-size:16pt;margin:0;font-weight:700}
+#print-root .sub{font-size:9pt;margin:3pt 0 0}
+#print-root h2{font-size:11pt;font-weight:700;margin:0 0 5pt}
+#print-root h3{font-size:10pt;font-weight:700;margin:0 0 3pt}
+#print-root .pq{margin:0 0 16pt;break-inside:avoid-page}
+#print-root .pq.nova{break-after:page}
+#print-root .enun{text-align:justify}
+#print-root .alts{list-style:none;margin:7pt 0 0;padding:0}
+#print-root .alts li{margin:0 0 4pt;display:flex;gap:6pt}
+#print-root .al{font-weight:700;flex:none}
+#print-root figure{margin:6pt 0;text-align:center;break-inside:avoid}
+#print-root img{max-height:8cm;max-width:100%;width:auto;border:0!important;border-radius:0!important}
+#print-root figcaption{font-size:8pt;margin-top:2pt}
+#print-root .resp{border:1pt solid #888;height:4.5cm;margin-top:7pt;padding:4pt;font-size:9pt}
+#print-root table{width:100%;border-collapse:collapse;font-size:10pt}
+#print-root th,#print-root td{border:.5pt solid #888;padding:2pt 5pt;text-align:left;vertical-align:top}
+#print-root .quebra{break-before:page}
+#print-root .cq{margin:0 0 11pt;break-inside:avoid-page}
+#print-root .cq p{margin:0 0 3pt;font-size:10pt}
+}`;
+function mfSemAcento(t) { return String(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+function mfAguardar(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/** Carrega as imagens dentro de `raiz` antes de imprimir. */
+async function mfCarregarImagens(raiz) {
+  let imgs = [...raiz.querySelectorAll("img[data-fid]")];
+  if (!imgs.length) return;
+  if (!(window.CONFIG || {}).FIREBASE) { MC(raiz); await Promise.race([mfAguardar(8e3), Promise.all(imgs.map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })))]); return; }
+  await Promise.all(imgs.map(async e => {
+    let t = null;
+    try { t = await Promise.race([Promise.resolve(window.__imagem && window.__imagem(e.dataset.fid)), mfAguardar(12e3).then(() => null)]); } catch {}
+    if (t) { e.src = t; e.dataset.ok = "1"; try { await e.decode(); } catch {} }
+    else { let n = document.createElement("p"); n.textContent = "[Imagem indisponível]"; e.replaceWith(n); }
+  }));
+}
+
+/** Monta e imprime as questões. conteudo: questoes | gabarito | completo */
+async function mfImprimirQuestoes({ filtro, titulo, qtd, ordem, conteudo, paginar }) {
+  be("Preparando a impressão…", "info", 5e3);
+  let { ids } = await ge("listarQuestoes", { filtro, apenasIds: !0, ordem });
+  if (qtd > 0) ids = ids.slice(0, qtd);
+  if (!ids.length) throw new Error("Nenhuma questão para imprimir.");
+  let itens = [];
+  for (let i = 0; i < ids.length; i += 50) itens.push(...(await ge("buscarQuestao", { ids: ids.slice(i, i + 50), revelar: !0 })).itens);
+  let imgs = (q, pos) => Tc((q.imagens || []).filter(m => m.posicao === pos));
+  let rotulo = q => `${q.instituicao} ${q.ano} · Questão ${q.numero}`;
+  let disc = q => !(q.alternativas || []).length;
+  let gab = q => q.anulada ? "Anulada" : (q.gabarito || "—");
+  let corpo = itens.map((q, k) => O`<section class="pq ${paginar ? "nova" : ""}">
+    <h2>${k + 1}. ${rotulo(q)}${q.anulada ? " (anulada)" : ""}</h2>
+    <div class="enun texto-questao">${q.enunciado}</div>${imgs(q, "enunciado")}
+    ${disc(q) ? O`<div class="resp">Resposta:</div>` : O`<ol class="alts">${q.alternativas.map(a => O`<li><span class="al">${a.letra})</span><span class="texto-questao">${a.texto}${imgs(q, "alternativa_" + a.letra)}</span></li>`)}</ol>`}
+  </section>`);
+  let mesma = new Set(itens.map(q => q.provaId)).size === 1;
+  let gabarito = conteudo === "questoes" ? "" : O`<section class="quebra"><h2>Gabarito</h2>
+    <table><thead><tr><th>Nº</th><th>Questão</th><th>Gabarito</th><th>Área › Foco</th></tr></thead><tbody>${itens.map((q, k) => O`<tr><td>${k + 1}</td><td>${mesma ? "Questão " + q.numero : rotulo(q)}</td><td>${gab(q)}</td><td>${q.area} › ${q.foco}</td></tr>`)}</tbody></table></section>`;
+  let comentarios = conteudo !== "completo" ? "" : O`<section class="quebra"><h2>Comentários</h2>${itens.map((q, k) => {
+    let h = mfDividirComentario({ com: q.comentario, alts: q.alternativas || [] });
+    return O`<div class="cq"><h3>${k + 1}. ${rotulo(q)} — Gabarito: ${gab(q)}</h3>${h.com ? O`<p class="texto-questao">${h.com}</p>` : ""}${h.alts.filter(a => a.comentario).map(a => O`<p class="texto-questao"><b>${a.letra})</b> ${a.comentario}</p>`)}${imgs(q, "comentario")}</div>`;
+  })}</section>`;
+  document.getElementById("print-root") && document.getElementById("print-root").remove();
+  if (!document.getElementById("mf-print-css")) { let st = document.createElement("style"); st.id = "mf-print-css"; st.textContent = MF_CSS_IMPRESSAO; document.head.append(st); }
+  let raiz = document.createElement("div");
+  raiz.id = "print-root";
+  raiz.innerHTML = String(O`<header class="ph"><h1>${titulo}</h1><p class="sub">${Gt(itens.length, "questão", "questões")} · ${new Date().toLocaleDateString("pt-BR")}</p></header>${corpo}${gabarito}${comentarios}`);
+  document.body.append(raiz);
+  await mfCarregarImagens(raiz);
+  let limpar = () => { window.removeEventListener("afterprint", limpar); raiz.remove(); };
+  window.addEventListener("afterprint", limpar);
+  await mfAguardar(60);
+  window.print();
+}
+
+function mfTituloFiltro(a, provas, favoritas) {
+  let p = (a.provaId || []).map(id => { let x = provas.find(y => y.id === id); return x ? `${x.instituicao} ${x.ano}` : id; });
+  let partes = [];
+  p.length && partes.push(p.join(" + "));
+  a.ano && partes.push(a.ano);
+  a.area.length && partes.push(a.area.join(" + "));
+  a.subarea && partes.push(a.subarea);
+  a.foco && partes.push("Foco: " + a.foco);
+  return partes.join(" · ") || (favoritas ? "Favoritas" : "Questões");
+}
+
+/** Pergunta o que imprimir e imprime. */
+async function mfDialogoImprimir({ filtro, total, titulo, qtd = 0, ordem = "prova" }) {
+  if (!total) return be("Nenhuma questão para imprimir.", "erro");
+  let v = await pn({ titulo: "Imprimir questões", confirmar: "Imprimir", corpo: O`<p class="muted text-sm">${titulo} · ${Gt(total, "questão disponível", "questões disponíveis")}</p>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="label" for="p-qtd">Quantidade (0 = todas)</label><input id="p-qtd" name="qtd" type="number" min="0" max="500" value="${qtd}" class="input"></div>
+      <div><label class="label" for="p-ordem">Ordem</label><select id="p-ordem" name="ordem" class="input"><option value="prova" ${ordem === "prova" ? ot("selected") : ""}>Por prova</option><option value="aleatoria" ${ordem === "aleatoria" ? ot("selected") : ""}>Aleatória</option></select></div>
+    </div>
+    <div><label class="label" for="p-conteudo">O que imprimir</label><select id="p-conteudo" name="conteudo" class="input"><option value="questoes">Somente as questões</option><option value="gabarito">Questões + gabarito no final</option><option value="completo">Questões + gabarito e comentários no final</option></select></div>
+    <label class="inline-flex items-center gap-2"><input type="checkbox" name="pagina" class="h-4 w-4 accent-brand">Uma questão por página</label>
+    <p class="muted text-xs">Máximo de 500 questões por impressão. Na tela de impressão, escolha a impressora ou "Salvar como PDF".</p>` });
+  if (!v) return;
+  try {
+    await mfImprimirQuestoes({ filtro, titulo, qtd: Math.min(Math.max(Math.floor(Number(v.qtd) || 0), 0), 500) || (total > 500 ? 500 : 0), ordem: v.ordem, conteudo: v.conteudo, paginar: !!v.pagina });
+  } catch (e) { be(e.message, "erro", 6e3); }
+}
+
+/** Lista suspensa com caixas de seleção e busca para escolher várias provas. */
+function mfSeletorProvas({ raiz, provas, selecionadas, aoMudar }) {
+  let $ = s => raiz.querySelector(s), btn = $("#f-prova-btn"), pop = $("#f-prova-pop"), lista = $("#f-prova-lista"), inp = $("#f-prova-busca"), busca = "", aberto = !1;
+  function rotulo() {
+    let sel = selecionadas();
+    if (!sel.length) return "Todas";
+    if (sel.length === 1) { let p = provas().find(x => x.id === sel[0]); return p ? `${p.instituicao} ${p.ano}` : sel[0]; }
+    return `${sel.length} provas selecionadas`;
+  }
+  function desenhar() {
+    let sel = new Set(selecionadas()), q = mfSemAcento(busca);
+    let itens = provas().filter(p => !q || mfSemAcento(`${p.instituicao} ${p.ano}`).includes(q));
+    $("#f-prova-txt").textContent = rotulo();
+    $("#f-prova-n").textContent = sel.size ? `${sel.size} selecionada${sel.size === 1 ? "" : "s"}` : "Nenhuma selecionada (todas as provas)";
+    lista.innerHTML = String(itens.length ? O`${itens.map(p => O`<li><label class="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"><input type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-brand" data-pv="${p.id}" ${sel.has(p.id) ? ot("checked") : ""}><span class="min-w-0 flex-1">${p.instituicao} ${p.ano}</span><span class="muted shrink-0 text-xs tabular-nums">${p.total}</span></label></li>`)}` : O`<li class="muted px-2 py-3 text-center text-sm">Nenhuma prova encontrada.</li>`);
+  }
+  function abrir(v) { aberto = v; pop.classList.toggle("hidden", !v); btn.setAttribute("aria-expanded", v ? "true" : "false"); if (v) { desenhar(); inp.focus(); } }
+  btn.addEventListener("click", () => abrir(!aberto));
+  inp.addEventListener("input", () => { busca = inp.value; desenhar(); });
+  lista.addEventListener("change", ev => {
+    let c = ev.target.closest("[data-pv]");
+    if (!c) return;
+    ev.stopPropagation();
+    let sel = new Set(selecionadas());
+    c.checked ? sel.add(c.dataset.pv) : sel.delete(c.dataset.pv);
+    aoMudar([...sel]);
+    desenhar();
+  });
+  $("#f-prova-limpar").addEventListener("click", () => { aoMudar([]); desenhar(); });
+  $("#f-prova-ok").addEventListener("click", () => { abrir(!1); btn.focus(); });
+  pop.addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.stopPropagation(); abrir(!1); btn.focus(); } });
+  let fora = ev => { if (!raiz.isConnected) return document.removeEventListener("click", fora); aberto && !ev.target.closest("#f-prova-wrap") && abrir(!1); };
+  document.addEventListener("click", fora);
+  return { atualizar: desenhar };
+}
+
 var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334155",t=r.perc===null?0:r.perc;return O`<li class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
     <div class="sm:w-60">${Vt(r.area)}</div>
     <div class="flex flex-1 items-center gap-3">
@@ -2657,11 +2803,12 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
       <li><a class="flex items-center justify-between gap-3 py-2.5 text-sm hover:underline" href="${i.fim?"#/relatorio/"+i.id:"#/sessao/"+i.id}">
         <span class="min-w-0 truncate"><span class="font-semibold">${i.nome||i.tipo}</span> <span class="muted">· ${i.tipo} · ${Xr(i.inicio)}</span></span>
         <span class="shrink-0 tabular-nums">${i.fim?kt(i.perc):"em andamento"}</span></a></li>`)}</ul>
-  </section>`:""}`),mfLigarPainelFlash(r,e),r.addEventListener("click",async i=>{let a=i.target.closest("[data-area]");if(a)return e("#/questoes?area="+encodeURIComponent(a.dataset.area));let o=i.target.closest("[data-treinar]");if(o){let u=t.focosFracos[Number(o.dataset.treinar)].trilha;o.disabled=!0;try{let l=await ge("iniciarSessao",{tipo:"trilha",nome:u.nome,filtro:u.filtro,qtd:u.qtd,ordem:u.ordem});e("#/sessao/"+l.sessaoId)}catch(l){be(l.message,"erro"),o.disabled=!1}}})}var Lg={};xn(Lg,{render:()=>FA});var zv=30,OA=[["nao_respondidas","N\xE3o respondidas"],["erradas","Erradas"],["certas","Certas"],["favoritas","Favoritas"],["revisar","Revisar depois"]],PA=r=>({certa:O`<i data-lucide="circle-check" class="h-5 w-5 text-emerald-600" aria-hidden="true"></i><span class="sr-only">Respondida certa</span>`,errada:O`<i data-lucide="circle-x" class="h-5 w-5 text-rose-600" aria-hidden="true"></i><span class="sr-only">Respondida errada</span>`,anulada:O`<i data-lucide="ban" class="h-5 w-5 text-slate-400" aria-hidden="true"></i><span class="sr-only">Anulada</span>`,nova:O`<i data-lucide="circle-dashed" class="h-5 w-5 text-slate-300 dark:text-slate-600" aria-hidden="true"></i><span class="sr-only">Não respondida</span>`})[r];function zB(r,e,t){return O`<option value="">${t}</option>${r.map(n=>O`<option value="${n.v}" ${String(n.v)===String(e)?ot("selected"):""}>${n.t}</option>`)}`}async function FA(r,{query:e,opcoes:t,navegar:n}){let s=t.modo==="favoritas",i=q=>q?q.split(",").filter(Boolean):[],a={area:i(e.area),subarea:e.subarea||"",foco:e.foco||"",provaId:e.provaId||"",ano:e.ano||"",status:s?["favoritas"]:i(e.status),incluirAnuladas:e.anuladas==="1"},o=Math.max(1,Number(e.pagina)||1),u=null,l=0,B=s?"#/favoritas":"#/questoes",d=()=>{let q={};return a.area.length&&(q.area=a.area),a.subarea&&(q.subarea=[a.subarea]),a.foco&&(q.foco=[a.foco]),a.provaId&&(q.provaId=[a.provaId]),a.ano&&(q.ano=[Number(a.ano)]),a.status.length&&(q.status=a.status),a.incluirAnuladas&&(q.incluirAnuladas=!0),q},p=()=>{let q=new URLSearchParams;a.area.length&&q.set("area",a.area.join(",")),["subarea","foco","provaId","ano"].forEach(w=>{a[w]&&q.set(w,a[w])}),!s&&a.status.length&&q.set("status",a.status.join(",")),a.incluirAnuladas&&q.set("anuladas","1"),o>1&&q.set("pagina",o);let Q=q.toString();return B+(Q?"?"+Q:"")};r.innerHTML=String(O`
+  </section>`:""}`),mfLigarPainelFlash(r,e),r.addEventListener("click",async i=>{let a=i.target.closest("[data-area]");if(a)return e("#/questoes?area="+encodeURIComponent(a.dataset.area));let o=i.target.closest("[data-treinar]");if(o){let u=t.focosFracos[Number(o.dataset.treinar)].trilha;o.disabled=!0;try{let l=await ge("iniciarSessao",{tipo:"trilha",nome:u.nome,filtro:u.filtro,qtd:u.qtd,ordem:u.ordem});e("#/sessao/"+l.sessaoId)}catch(l){be(l.message,"erro"),o.disabled=!1}}})}var Lg={};xn(Lg,{render:()=>FA});var zv=30,OA=[["nao_respondidas","N\xE3o respondidas"],["erradas","Erradas"],["certas","Certas"],["favoritas","Favoritas"],["revisar","Revisar depois"]],PA=r=>({certa:O`<i data-lucide="circle-check" class="h-5 w-5 text-emerald-600" aria-hidden="true"></i><span class="sr-only">Respondida certa</span>`,errada:O`<i data-lucide="circle-x" class="h-5 w-5 text-rose-600" aria-hidden="true"></i><span class="sr-only">Respondida errada</span>`,anulada:O`<i data-lucide="ban" class="h-5 w-5 text-slate-400" aria-hidden="true"></i><span class="sr-only">Anulada</span>`,nova:O`<i data-lucide="circle-dashed" class="h-5 w-5 text-slate-300 dark:text-slate-600" aria-hidden="true"></i><span class="sr-only">Não respondida</span>`})[r];function zB(r,e,t){return O`<option value="">${t}</option>${r.map(n=>O`<option value="${n.v}" ${String(n.v)===String(e)?ot("selected"):""}>${n.t}</option>`)}`}async function FA(r,{query:e,opcoes:t,navegar:n}){let s=t.modo==="favoritas",i=q=>q?q.split(",").filter(Boolean):[],a={area:i(e.area),subarea:e.subarea||"",foco:e.foco||"",provaId:i(e.provaId),ano:e.ano||"",status:s?["favoritas"]:i(e.status),incluirAnuladas:e.anuladas==="1"},o=Math.max(1,Number(e.pagina)||1),u=null,l=0,B=s?"#/favoritas":"#/questoes",d=()=>{let q={};return a.area.length&&(q.area=a.area),a.subarea&&(q.subarea=[a.subarea]),a.foco&&(q.foco=[a.foco]),a.provaId.length&&(q.provaId=a.provaId),a.ano&&(q.ano=[Number(a.ano)]),a.status.length&&(q.status=a.status),a.incluirAnuladas&&(q.incluirAnuladas=!0),q},p=()=>{let q=new URLSearchParams;a.area.length&&q.set("area",a.area.join(",")),["subarea","foco","ano"].forEach(w=>{a[w]&&q.set(w,a[w])}),a.provaId.length&&q.set("provaId",a.provaId.join(",")),!s&&a.status.length&&q.set("status",a.status.join(",")),a.incluirAnuladas&&q.set("anuladas","1"),o>1&&q.set("pagina",o);let Q=q.toString();return B+(Q?"?"+Q:"")};r.innerHTML=String(O`
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div><h1 class="h1">${s?"Favoritas":"Quest\xF5es"}</h1>
       <p class="muted mt-1 text-sm" id="contagem" aria-live="polite">Carregando…</p></div>
     <div class="flex flex-wrap gap-2">
+      <button type="button" class="btn btn-outline btn-sm" id="b-imprimir"><i data-lucide="printer" class="h-4 w-4" aria-hidden="true"></i>Imprimir</button>
       <button type="button" class="btn btn-outline btn-sm" id="b-salvar"><i data-lucide="route" class="h-4 w-4" aria-hidden="true"></i>Salvar como trilha</button>
       <button type="button" class="btn btn-primary btn-sm" id="b-iniciar"><i data-lucide="play" class="h-4 w-4" aria-hidden="true"></i>Treinar com estes filtros</button>
     </div>
@@ -2672,7 +2819,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
       ${Yr.map(q=>Vt(q,{botao:!0,pressionado:a.area.includes(q)}))}
     </div>
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <div><label class="label" for="f-prova">Prova</label><select id="f-prova" class="input"></select></div>
+      <div class="relative" id="f-prova-wrap"><label class="label" id="l-prova">Provas</label><button type="button" id="f-prova-btn" class="input flex items-center justify-between gap-2 text-left" aria-haspopup="true" aria-expanded="false" aria-labelledby="l-prova f-prova-txt"><span id="f-prova-txt" class="min-w-0 truncate">Todas</span><i data-lucide="chevron-down" class="h-4 w-4 shrink-0" aria-hidden="true"></i></button><div id="f-prova-pop" class="absolute left-0 z-30 mt-1 hidden w-[min(24rem,88vw)] rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"><label class="sr-only" for="f-prova-busca">Buscar prova</label><input id="f-prova-busca" type="search" class="input mb-2 py-1.5" placeholder="Buscar prova…" autocomplete="off"><div class="mb-1 flex items-center justify-between gap-2 px-1"><span id="f-prova-n" class="muted text-xs"></span><button type="button" id="f-prova-limpar" class="btn btn-ghost btn-sm">Limpar</button></div><ul id="f-prova-lista" class="max-h-64 overflow-auto"></ul><div class="mt-2 flex justify-end"><button type="button" id="f-prova-ok" class="btn btn-primary btn-sm">Pronto</button></div></div></div>
       <div><label class="label" for="f-ano">Ano</label><select id="f-ano" class="input"></select></div>
       <div><label class="label" for="f-sub">Subárea</label><select id="f-sub" class="input"></select></div>
       <div><label class="label" for="f-foco">Foco</label><select id="f-foco" class="input"></select></div>
@@ -2684,7 +2831,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
     </div>
   </section>
 
-  <div id="resultado" class="mt-4">${Wi(4)}</div>`);let m=q=>r.querySelector(q);function v(){let q=Bh(a.area,[]);a.subarea&&!q.subareas.includes(a.subarea)&&(a.subarea="");let Q=Bh(a.area,a.subarea?[a.subarea]:[]);a.foco&&!Q.focos.includes(a.foco)&&(a.foco=""),m("#f-sub").innerHTML=String(zB(q.subareas.map(w=>({v:w,t:w})),a.subarea,"Todas")),m("#f-foco").innerHTML=String(zB(Q.focos.map(w=>({v:w,t:w})),a.foco,"Todos"))}function _(){let q=(u?u.provas:[]).map(w=>({v:w.id,t:`${w.instituicao} ${w.ano} (${w.total})`})),Q=[...new Set((u?u.provas:[]).map(w=>w.ano))].sort((w,y)=>y-w).map(w=>({v:w,t:w}));m("#f-prova").innerHTML=String(zB(q,a.provaId,"Todas")),m("#f-ano").innerHTML=String(zB(Q,a.ano,"Todos"))}async function A(){let q=m("#resultado");history.replaceState(null,"",p());try{let Q=await ge("listarQuestoes",{filtro:d(),pagina:o,tamanho:zv,facetas:!u});Q.facetas&&(u=Q.facetas,_()),l=Q.total;let w=Math.max(1,Math.ceil(l/zv));if(o>w)return o=w,A();m("#contagem").textContent=l?`${Gt(l,"quest\xE3o","quest\xF5es")} encontrada${l===1?"":"s"}`:"Nenhuma quest\xE3o encontrada",Q.itens.length?q.innerHTML=String(O`
+  <div id="resultado" class="mt-4">${Wi(4)}</div>`);let m=q=>r.querySelector(q),mfSP=mfSeletorProvas({raiz:r,provas:()=>u?u.provas:[],selecionadas:()=>a.provaId,aoMudar:q=>{a.provaId=q,o=1,A()}});function v(){let q=Bh(a.area,[]);a.subarea&&!q.subareas.includes(a.subarea)&&(a.subarea="");let Q=Bh(a.area,a.subarea?[a.subarea]:[]);a.foco&&!Q.focos.includes(a.foco)&&(a.foco=""),m("#f-sub").innerHTML=String(zB(q.subareas.map(w=>({v:w,t:w})),a.subarea,"Todas")),m("#f-foco").innerHTML=String(zB(Q.focos.map(w=>({v:w,t:w})),a.foco,"Todos"))}function _(){let q=(u?u.provas:[]).map(w=>({v:w.id,t:`${w.instituicao} ${w.ano} (${w.total})`})),Q=[...new Set((u?u.provas:[]).map(w=>w.ano))].sort((w,y)=>y-w).map(w=>({v:w,t:w}));mfSP.atualizar(),m("#f-ano").innerHTML=String(zB(Q,a.ano,"Todos"))}async function A(){let q=m("#resultado");history.replaceState(null,"",p());try{let Q=await ge("listarQuestoes",{filtro:d(),pagina:o,tamanho:zv,facetas:!u});Q.facetas&&(u=Q.facetas,_()),l=Q.total;let w=Math.max(1,Math.ceil(l/zv));if(o>w)return o=w,A();m("#contagem").textContent=l?`${Gt(l,"quest\xE3o","quest\xF5es")} encontrada${l===1?"":"s"}`:"Nenhuma quest\xE3o encontrada",Q.itens.length?q.innerHTML=String(O`
         <ul class="space-y-2">${Q.itens.map(y=>{let g=Ee.prefs.ocultarFoco!==!1&&y.status==="nova";return O`<li><button type="button" data-abrir="${y.id}" class="card flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-brand dark:hover:border-sky-400">
             <span class="shrink-0">${PA(y.anulada?"anulada":y.status)}</span>
             <span class="min-w-0 flex-1">
@@ -2697,7 +2844,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
           <button type="button" class="btn btn-outline btn-sm" data-pag="-1" ${o<=1?ot("disabled"):""}><i data-lucide="chevron-left" class="h-4 w-4" aria-hidden="true"></i>Anterior</button>
           <span class="muted text-sm">Página ${o} de ${w}</span>
           <button type="button" class="btn btn-outline btn-sm" data-pag="1" ${o>=w?ot("disabled"):""}>Próxima<i data-lucide="chevron-right" class="h-4 w-4" aria-hidden="true"></i></button>
-        </nav>`:""}`):q.innerHTML=String($n(s?"heart":"search-x",s?"Nenhuma favorita ainda":"Nada por aqui",s?"Toque no cora\xE7\xE3o de uma quest\xE3o para guard\xE1-la aqui.":"Ajuste os filtros ou importe mais quest\xF5es.")),window.lucide&&window.lucide.createIcons()}catch(Q){q.innerHTML=String(O`<div class="card text-sm text-rose-700 dark:text-rose-400" role="alert">${Q.message}</div>`)}}async function N(q){try{let Q=await ge("listarQuestoes",{filtro:d(),apenasIds:!0,ordem:"prova"});sessionStorage.setItem("bq_fila",JSON.stringify({ids:Q.ids,origem:p()})),n("#/q/"+encodeURIComponent(q))}catch(Q){be(Q.message,"erro")}}r.addEventListener("click",async q=>{let Q=q.target.closest("button[data-area]");if(Q){let g=Q.dataset.area;return a.area=a.area.includes(g)?a.area.filter(E=>E!==g):[...a.area,g],Q.setAttribute("aria-pressed",a.area.includes(g)?"true":"false"),o=1,v(),A()}let w=q.target.closest("[data-abrir]");if(w)return N(w.dataset.abrir);let y=q.target.closest("[data-pag]");if(y)return o+=Number(y.dataset.pag),window.scrollTo(0,0),A();if(q.target.closest("#b-limpar"))return Object.assign(a,{area:[],subarea:"",foco:"",provaId:"",ano:"",status:s?["favoritas"]:[],incluirAnuladas:!1}),r.querySelectorAll("[data-status]").forEach(g=>{g.checked=!1}),r.querySelectorAll("button[data-area]").forEach(g=>g.setAttribute("aria-pressed","false")),m("#f-anul").checked=!1,o=1,v(),_(),A();if(q.target.closest("#b-salvar"))return $();if(q.target.closest("#b-iniciar"))return z()}),r.addEventListener("change",q=>{let Q=q.target;if(Q.id==="f-prova")a.provaId=Q.value;else if(Q.id==="f-ano")a.ano=Q.value;else if(Q.id==="f-sub")a.subarea=Q.value,a.foco="",v();else if(Q.id==="f-foco")a.foco=Q.value;else if(Q.id==="f-anul")a.incluirAnuladas=Q.checked;else if(Q.dataset.status)a.status=[...r.querySelectorAll("[data-status]")].filter(w=>w.checked).map(w=>w.dataset.status);else return;o=1,A()});let K=q=>O`
+        </nav>`:""}`):q.innerHTML=String($n(s?"heart":"search-x",s?"Nenhuma favorita ainda":"Nada por aqui",s?"Toque no cora\xE7\xE3o de uma quest\xE3o para guard\xE1-la aqui.":"Ajuste os filtros ou importe mais quest\xF5es.")),window.lucide&&window.lucide.createIcons()}catch(Q){q.innerHTML=String(O`<div class="card text-sm text-rose-700 dark:text-rose-400" role="alert">${Q.message}</div>`)}}async function N(q){try{let Q=await ge("listarQuestoes",{filtro:d(),apenasIds:!0,ordem:"prova"});sessionStorage.setItem("bq_fila",JSON.stringify({ids:Q.ids,origem:p()})),n("#/q/"+encodeURIComponent(q))}catch(Q){be(Q.message,"erro")}}r.addEventListener("click",async q=>{let Q=q.target.closest("button[data-area]");if(Q){let g=Q.dataset.area;return a.area=a.area.includes(g)?a.area.filter(E=>E!==g):[...a.area,g],Q.setAttribute("aria-pressed",a.area.includes(g)?"true":"false"),o=1,v(),A()}let w=q.target.closest("[data-abrir]");if(w)return N(w.dataset.abrir);let y=q.target.closest("[data-pag]");if(y)return o+=Number(y.dataset.pag),window.scrollTo(0,0),A();if(q.target.closest("#b-limpar"))return Object.assign(a,{area:[],subarea:"",foco:"",provaId:[],ano:"",status:s?["favoritas"]:[],incluirAnuladas:!1}),r.querySelectorAll("[data-status]").forEach(g=>{g.checked=!1}),r.querySelectorAll("button[data-area]").forEach(g=>g.setAttribute("aria-pressed","false")),m("#f-anul").checked=!1,o=1,v(),_(),A();if(q.target.closest("#b-imprimir"))return mfDialogoImprimir({filtro:d(),total:l,titulo:mfTituloFiltro(a,u?u.provas:[],s),qtd:l>500?500:0});if(q.target.closest("#b-salvar"))return $();if(q.target.closest("#b-iniciar"))return z()}),r.addEventListener("change",q=>{let Q=q.target;if(Q.id==="f-ano")a.ano=Q.value;else if(Q.id==="f-sub")a.subarea=Q.value,a.foco="",v();else if(Q.id==="f-foco")a.foco=Q.value;else if(Q.id==="f-anul")a.incluirAnuladas=Q.checked;else if(Q.dataset.status)a.status=[...r.querySelectorAll("[data-status]")].filter(w=>w.checked).map(w=>w.dataset.status);else return;o=1,A()});let K=q=>O`
     <div class="grid grid-cols-2 gap-3">
       <div><label class="label" for="m-qtd">Quantidade (0 = todas)</label><input id="m-qtd" name="qtd" type="number" min="0" max="500" value="${q}" class="input"></div>
       <div><label class="label" for="m-ordem">Ordem</label><select id="m-ordem" name="ordem" class="input"><option value="aleatoria">Aleatória</option><option value="prova">Por prova</option></select></div>
@@ -2811,7 +2958,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
           <span class="-mr-2 -mt-1 flex shrink-0 items-center"><button type="button" class="btn btn-ghost btn-sm px-2" data-renomear="${s.id}" aria-label="Renomear trilha ${s.nome}" title="Renomear"><i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i></button><button type="button" class="btn btn-ghost btn-sm px-2" data-excluir="${s.id}" aria-label="Excluir trilha ${s.nome}" title="Excluir"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button></span></div>
         <div class="flex flex-wrap items-center gap-2">${GA(s.filtro)}</div>
         <p class="muted text-xs">${Gt(s.total,"quest\xE3o dispon\xEDvel","quest\xF5es dispon\xEDveis")} · ${s.qtd?"sorteia "+s.qtd:"todas"} · ordem ${s.ordem==="prova"?"por prova":"aleat\xF3ria"}</p>
-        <button type="button" class="btn btn-primary btn-sm mt-auto self-start" data-iniciar="${s.id}" ${s.total?"":O`disabled`}><i data-lucide="play" class="h-4 w-4" aria-hidden="true"></i>Iniciar</button>
+        <div class="mt-auto flex flex-wrap items-center gap-2"><button type="button" class="btn btn-primary btn-sm" data-iniciar="${s.id}" ${s.total?"":O`disabled`}><i data-lucide="play" class="h-4 w-4" aria-hidden="true"></i>Iniciar</button><button type="button" class="btn btn-outline btn-sm" data-imprimir="${s.id}" ${s.total?"":O`disabled`}><i data-lucide="printer" class="h-4 w-4" aria-hidden="true"></i>Imprimir</button></div>
       </li>`)}</ul>`:$n("route","Nenhuma trilha ainda","Em Quest\xF5es, combine filtros (ex.: Exantem\xE1ticas + ITU) e use \u201CSalvar como trilha\u201D.",O`<a href="#/questoes" class="btn btn-primary mt-5">Ir para Questões</a>`)}
   </section>
 
@@ -2820,7 +2967,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
       <li class="flex items-center justify-between gap-3 py-2.5 text-sm">
         <span class="min-w-0"><span class="block truncate font-semibold">${s.nome}</span><span class="muted text-xs">${Xr(s.inicio)} · ${Gt(s.total,"quest\xE3o","quest\xF5es")}</span></span>
         <span class="flex shrink-0 items-center gap-1">${s.fim?O`<a class="btn btn-outline btn-sm shrink-0" href="#/relatorio/${s.id}">${kt(s.perc)} · relatório</a>`:O`<a class="btn btn-primary btn-sm shrink-0" href="#/sessao/${s.id}">Continuar</a>`}${mfAcoesSes(s)}</span>
-      </li>`)}</ul></section>`:""}`),r.addEventListener("click",async s=>{if(await mfCliqueSes(s))return;let c=s.target.closest("[data-renomear]");if(c){let o=t.find(u=>u.id===c.dataset.renomear);await pn({titulo:"Renomear trilha",corpo:O`<div><label class="label" for="m-nome">Nome da trilha</label><input id="m-nome" name="nome" class="input" maxlength="80" required value="${o.nome}"></div>`,confirmar:"Salvar",onSubmit:async u=>{if(!u.nome.trim())throw new Error("D\xEA um nome \xE0 trilha.");await ge("renomearTrilha",{id:o.id,nome:u.nome}),be("Trilha renomeada.","ok"),window.dispatchEvent(new HashChangeEvent("hashchange"))}});return}let i=s.target.closest("[data-iniciar]");if(i){let o=t.find(u=>u.id===i.dataset.iniciar);await pn({titulo:`Iniciar \u201C${o.nome}\u201D`,corpo:O`<div class="grid grid-cols-2 gap-3">
+      </li>`)}</ul></section>`:""}`),r.addEventListener("click",async s=>{if(await mfCliqueSes(s))return;let mfp=s.target.closest("[data-imprimir]");if(mfp){let o=t.find(u=>u.id===mfp.dataset.imprimir);return mfDialogoImprimir({filtro:o.filtro,total:o.total,titulo:o.nome,qtd:o.qtd,ordem:o.ordem})}let c=s.target.closest("[data-renomear]");if(c){let o=t.find(u=>u.id===c.dataset.renomear);await pn({titulo:"Renomear trilha",corpo:O`<div><label class="label" for="m-nome">Nome da trilha</label><input id="m-nome" name="nome" class="input" maxlength="80" required value="${o.nome}"></div>`,confirmar:"Salvar",onSubmit:async u=>{if(!u.nome.trim())throw new Error("D\xEA um nome \xE0 trilha.");await ge("renomearTrilha",{id:o.id,nome:u.nome}),be("Trilha renomeada.","ok"),window.dispatchEvent(new HashChangeEvent("hashchange"))}});return}let i=s.target.closest("[data-iniciar]");if(i){let o=t.find(u=>u.id===i.dataset.iniciar);await pn({titulo:`Iniciar \u201C${o.nome}\u201D`,corpo:O`<div class="grid grid-cols-2 gap-3">
           <div><label class="label" for="m-modo">Modo</label><select id="m-modo" name="modo" class="input"><option value="imediato">Ver resposta na hora</option><option value="prova">Prova (gabarito no final)</option></select></div>
           <div><label class="label" for="m-tempo">Tempo limite (min)</label><input id="m-tempo" name="tempoLimiteMin" type="number" min="0" max="720" value="0" class="input"></div></div>`,confirmar:"Come\xE7ar",onSubmit:async u=>{let l=await ge("iniciarSessao",{tipo:"trilha",trilhaId:o.id,modo:u.modo,tempoLimiteMin:Number(u.tempoLimiteMin)});e("#/sessao/"+l.sessaoId)}});return}let a=s.target.closest("[data-excluir]");if(a){let o=t.find(u=>u.id===a.dataset.excluir);if(!await Ac(`Excluir a trilha \u201C${o.nome}\u201D? Seu hist\xF3rico de respostas n\xE3o \xE9 afetado.`,{confirmar:"Excluir",perigo:!0,titulo:"Excluir trilha"}))return;try{await ge("excluirTrilha",{id:o.id}),be("Trilha exclu\xEDda.","ok"),window.dispatchEvent(new HashChangeEvent("hashchange"))}catch(u){be(u.message,"erro")}}})}var Hg={};xn(Hg,{render:()=>HA});async function HA(r,{navegar:e}){let[t,n]=await Promise.all([ge("listarQuestoes",{filtro:{},pagina:1,tamanho:1,facetas:!0}),ge("listarSessoes",{limite:40})]),s=t.facetas.provas,i=t.facetas.areas,a=n.sessoes.filter(p=>p.tipo!=="trilha"),o=O`<div class="grid grid-cols-2 gap-3">
     <div><label class="label" for="m-modo">Modo</label><select id="m-modo" name="modo" class="input"><option value="prova">Prova (gabarito no final)</option><option value="imediato">Ver resposta na hora</option></select></div>
