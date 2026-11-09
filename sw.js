@@ -3,9 +3,9 @@
 // - Bibliotecas e fontes de CDN: usa o cache e atualiza em segundo plano.
 // - Dados (Firestore) NÃO passam por aqui: o próprio Firebase guarda o banco no aparelho.
 // Para forçar todos a atualizarem, mude o número de VERSAO.
-const VERSAO = 'v3';
+const VERSAO = 'v4';
 const CACHE = 'bq-' + VERSAO;
-const BASICOS = ['./', 'index.html', 'manifest.webmanifest', 'favicon.svg', 'favicon.ico', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const BASICOS = ['./', 'index.html', 'manifest.webmanifest', 'favicon.svg', 'favicon.ico', 'logo-peixe.png', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 const CDNS = ['cdn.tailwindcss.com', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', e => {
