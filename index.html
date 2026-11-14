@@ -361,6 +361,7 @@ var ACOES = {
   salvarNomeUsuario: salvarNomeUsuario_,
   definirSelecao: definirSelecao_,
   questaoCompleta: questaoCompleta_,
+  exportarBanco: exportarBanco_,
   editarQuestao: editarQuestao_,
   taxonomia: taxonomia_,
   taxonomiaUso: taxonomiaUso_,
@@ -1660,6 +1661,32 @@ function editarQuestao_(u, p) {
   return r;
 }
 
+// ───────────────────────────── Exportar o banco (só usuário 02) ─────────────────────────────
+
+/** Banco inteiro no formato do importador, agrupado por prova. As imagens são baixadas pelo app. */
+function exportarBanco_(u, p) {
+  exigirAdmin_(u);
+  var sel = selecaoDasProvas_(), porProva = {}, ordem = [];
+  var ids = indice_().map(function (q) { return q[I_ID]; });
+  for (var i = 0; i < ids.length; i += 200) {
+    questoes_(ids.slice(i, i + 200)).forEach(function (q) {
+      if (!q) return;
+      var pid = q.provaId;
+      if (!porProva[pid]) {
+        porProva[pid] = { prova: { instituicao: q.instituicao, ano: q.ano, id: pid, nome: q.provaNome || (q.instituicao + ' ' + q.ano), selecao: (sel[pid] || {}).selecao || '' }, questoes: [] };
+        ordem.push(pid);
+      }
+      porProva[pid].questoes.push({
+        id: q.id, numero: q.numero, area: q.area, subarea: q.subarea, foco: q.foco, enunciado: q.enunciado,
+        alternativas: q.alternativas, gabarito: q.gabarito, anulada: q.anulada, comentario: q.comentario,
+        imagens: q.imagens.map(function (im) { return { arquivo: im.arquivo, posicao: im.posicao, legenda: im.legenda, fileId: im.fileId }; }),
+        confianca_classificacao: q.confianca
+      });
+    });
+  }
+  return { provas: ordem.map(function (k) { return porProva[k]; }) };
+}
+
 function exigirAdmin_(u) {
   if (u !== USUARIO_ADMIN) throw erro_('Somente o usuário 02 pode alterar focos e classificações.', 'permissao');
 }
@@ -2839,7 +2866,43 @@ async function mfExportarFocos(formato) {
   }
   be("Arquivo gerado.", "ok", 2500);
 }
-function mfLigarExportacao(raiz) { raiz.addEventListener("click", e => { let b = e.target.closest("[data-exportar]"); b && mfExportarFocos(b.dataset.exportar); }); }
+function mfLigarExportacao(raiz) { raiz.addEventListener("click", e => { if (e.target.closest("[data-exportar-banco]")) return mfExportarBanco(); let b = e.target.closest("[data-exportar]"); b && mfExportarFocos(b.dataset.exportar); }); }
+/** Gera um .zip com um JSON por prova e as imagens em imagens/ (formato do importador). Só usuário 02. */
+async function mfExportarBanco() {
+  if (!mfAdmin()) return be("Somente o usuário 02 pode exportar o banco.", "erro");
+  if (!window.JSZip) return be("A biblioteca de zip não carregou. Verifique a internet.", "erro");
+  be("Exportando o banco… pode levar alguns minutos.", "info", 8000);
+  try {
+    let { provas } = await ge("exportarBanco"), zip = new JSZip(), feitas = new Map(), total = provas.reduce((n, p) => n + p.questoes.length, 0), nImg = 0, faltam = 0;
+    for (let p of provas) {
+      for (let q of p.questoes) {
+        for (let im of q.imagens) {
+          let fid = im.fileId; delete im.fileId;
+          if (!fid) continue;
+          if (!feitas.has(fid)) {
+            let d = window.__imagem ? await window.__imagem(fid) : null, m = d && /^data:([^;]+);base64,(.*)$/.exec(d);
+            if (!m) { faltam++; feitas.set(fid, null); }
+            else {
+              let ext = (m[1].split("/")[1] || "png").replace("jpeg", "jpg").replace("svg+xml", "svg");
+              let nome = fid + "." + ext;
+              zip.file("imagens/" + nome, m[2], { base64: !0 });
+              feitas.set(fid, nome); nImg++;
+            }
+          }
+          let nome = feitas.get(fid);
+          if (nome) im.arquivo = nome;
+        }
+      }
+    }
+    provas.forEach((p, i) => zip.file(`provas/${String(i + 1).padStart(2, "0")}-${slug(p.prova.instituicao + " " + p.prova.ano)}.json`, JSON.stringify({ versao_schema: "1.0", ...p }, null, 2)));
+    zip.file("LEIA-ME.txt", `Backup do banco MedFisher · ${new Date().toLocaleString("pt-BR")}\n${provas.length} provas · ${total} questões · ${nImg} imagens${faltam ? " (" + faltam + " não encontradas)" : ""}\n\nprovas/*.json: um arquivo por prova, no formato de importação.\nimagens/: arquivos citados nas questões.\n`);
+    let blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), u = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = u; a.download = `banco-medfisher-${new Date().toISOString().slice(0, 10)}.zip`; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 2e3);
+    be(`Backup pronto: ${provas.length} provas, ${total} questões, ${nImg} imagens.`, "ok", 6000);
+  } catch (x) { be(x.message || "Falha ao exportar.", "erro", 6000); }
+}
+function slug(t) { return String(t).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
 function mfBotoesExportar() {
   return O`<div class="flex flex-wrap gap-2"><button type="button" class="btn btn-outline btn-sm" data-exportar="csv"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar CSV</button><button type="button" class="btn btn-outline btn-sm" data-exportar="json"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar JSON</button><button type="button" class="btn btn-outline btn-sm" data-exportar="copiar"><i data-lucide="copy" class="h-4 w-4" aria-hidden="true"></i>Copiar todos os focos</button></div>`;
 }
@@ -3556,6 +3619,7 @@ ${a}</section>
   </section>
 
   <section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Exportar focos</h2></div>${mfBotoesExportar()}</section>
+  ${mfAdmin()?O`<section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Backup do banco</h2><p class="muted mt-1 text-xs">Todas as provas em JSON, com as imagens em <code>imagens/</code>. O mesmo arquivo pode ser reimportado.</p></div><button type="button" class="btn btn-outline" data-exportar-banco><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar banco (.zip)</button></section>`:""}
   ${mfAdmin()?O`<section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Focos e classificação</h2></div><a href="#/taxonomia" class="btn btn-outline"><i data-lucide="tag" class="h-4 w-4" aria-hidden="true"></i>Abrir</a></section>`:""}
   <section class="card mt-5">
     <h2 class="text-sm font-semibold">Nomes das provas</h2>
