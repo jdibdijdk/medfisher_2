@@ -747,9 +747,9 @@ function ordenar_(lista, ordem) {
 }
 
 function facetas_() {
-  var provas = {}, areas = {}, selP = selecaoDasProvas_();
+  var provas = {}, areas = {}, selP = selecaoDasProvas_(), rotP = rotulosSelecao_();
   indice_().forEach(function (q) {
-    var p = provas[q[I_PROVA]] || (provas[q[I_PROVA]] = { id: q[I_PROVA], instituicao: q[I_INST], ano: q[I_ANO], total: 0, selecao: (selP[q[I_PROVA]] || {}).selecao || '' });
+    var p = provas[q[I_PROVA]] || (provas[q[I_PROVA]] = { id: q[I_PROVA], instituicao: q[I_INST], ano: q[I_ANO], total: 0, selecao: (selP[q[I_PROVA]] || {}).selecao || '', rotulo: rotP[q[I_PROVA]] || '' });
     p.total++;
     areas[q[I_AREA]] = (areas[q[I_AREA]] || 0) + 1;
   });
@@ -771,10 +771,11 @@ function listarQuestoes_(u, p) {
   var tam = Math.min(Math.max(Number(p.tamanho) || 50, 1), 200), pag = Math.max(Number(p.pagina) || 1, 1), est = estadoUsuario_(u);
   res.pagina = pag;
   res.tamanho = tam;
+  var rotL = rotulosSelecao_();
   res.itens = lista.slice((pag - 1) * tam, pag * tam).map(function (q) {
     var id = q[I_ID], r = est.r[id];
     return {
-      id: id, provaId: q[I_PROVA], instituicao: q[I_INST], ano: q[I_ANO], numero: q[I_NUM],
+      id: id, provaId: q[I_PROVA], selecaoRotulo: rotL[q[I_PROVA]] || '', instituicao: q[I_INST], ano: q[I_ANO], numero: q[I_NUM],
       area: q[I_AREA], subarea: q[I_SUB], foco: q[I_FOCO], anulada: !!q[I_ANUL],
       status: r ? (r[1] === 1 ? 'certa' : r[1] === 0 ? 'errada' : 'anulada') : 'nova',
       favorita: !!est.f[id], revisar: !!est.v[id]
@@ -796,7 +797,7 @@ function buscarQuestoes_(u, p) {
   if (ids.length > MAX_IDS_BUSCA) throw erro_('No m\xE1ximo ' + MAX_IDS_BUSCA + ' quest\xF5es por chamada.');
   var ses = p.contextoId ? sessao_(u, String(p.contextoId)) : null;
   var bloqueado = !!(ses && ses.config.modo === 'prova' && !ses.fim);
-  var est = estadoUsuario_(u), notas = notasUsuario_(u, ids), qs = questoes_(ids), itens = [];
+  var est = estadoUsuario_(u), notas = notasUsuario_(u, ids), qs = questoes_(ids), itens = [], rotB = rotulosSelecao_();
   qs.forEach(function (q) {
     if (!q) return;
     var r = est.r[q.id];
@@ -809,6 +810,7 @@ function buscarQuestoes_(u, p) {
       o.imagens = o.imagens.filter(function (im) { return im.posicao !== 'comentario'; });
     }
     o.revelado = revelar;
+    o.selecaoRotulo = rotB[q.provaId] || '';
     o.estado = {
       marcada: r ? r[0] : null, correta: r ? (r[1] === 2 ? null : r[1] === 1) : null, tentativas: r ? r[2] : 0,
       favorita: !!est.f[q.id], revisar: !!est.v[q.id], nota: notas[q.id] ? notas[q.id].texto : ''
@@ -1002,7 +1004,7 @@ function selecionarIds_(u, p) {
     var da = indice_().filter(function (q) { return q[I_PROVA] === provaId; });
     config.ordem = p.ordem === 'aleatoria' ? 'aleatoria' : 'prova';
     ids = ordenar_(da, config.ordem).map(function (q) { return q[I_ID]; });
-    config.nome = da.length ? da[0][I_INST] + ' ' + da[0][I_ANO] : provaId;
+    config.nome = da.length ? da[0][I_INST] + ' ' + da[0][I_ANO] + (rotulosSelecao_()[provaId] ? ' · ' + rotulosSelecao_()[provaId] : '') : provaId;
     config.provaId = provaId;
   } else if (tipo === 'simulado') {
     var cfg = p.config || {};
@@ -1374,28 +1376,39 @@ function importarLote_(u, p) {
   var res = { importadas: 0, duplicadas: [], erros: [], avisos: [], paraUpload: [], focosNovos: [] };
 
   comLock_(function () {
-    var idx = indice_(), chaves = {}, ids = {}, linhas = [], novosTax = {};
-    idx.forEach(function (q) { chaves[chaveQuestao_(q[I_INST], q[I_ANO], q[I_NUM])] = q[I_ID]; ids[q[I_ID]] = 1; });
+    var idx = indice_(), chaves = {}, ids = {}, linhas = [], novosTax = {}, selP = selecaoDasProvas_();
+    // mesma instituição + ano com seleções diferentes (R1 x R+) são provas distintas
+    if (selIn && !str_(pv.id)) {
+      var baseId = prova.id;
+      if (idx.some(function (q) { return q[I_PROVA] === baseId; }) && ((selP[baseId] || {}).selecao || '') !== selIn) prova.id = baseId + '-' + SUFIXO_SEL[selIn];
+    }
+    idx.forEach(function (q) {
+      var k0 = chaveQuestao_(q[I_INST], q[I_ANO], q[I_NUM]);
+      (chaves[k0] = chaves[k0] || []).push({ id: q[I_ID], sel: (selP[q[I_PROVA]] || {}).selecao || '' });
+      ids[q[I_ID]] = 1;
+    });
     qs.forEach(function (q, i) {
       var linha = offset + i + 1, n = normalizar_(q, prova);
       var numero = q && q.numero, qid = q && q.id;
       if (n.erro) { res.erros.push({ linha: linha, numero: numero, id: qid, motivo: n.erro }); return; }
       var ob = n.ok, k = chaveQuestao_(ob.instituicao, ob.ano, ob.numero);
-      if (chaves[k]) {
+      var dup = (chaves[k] || []).filter(function (e) { return !selIn || e.sel === selIn; })[0];
+      if (dup) {
         var pend = [];
         if (ob.imagens.length) {
-          var ex = questao_(chaves[k]);
+          var ex = questao_(dup.id);
           (ex ? ex.imagens : []).forEach(function (im) {
             if (!im.fileId) pend.push({ questaoId: ex.id, arquivo: im.arquivo, posicao: im.posicao, legenda: im.legenda });
           });
         }
         pend.forEach(function (x) { res.paraUpload.push(x); });
-        res.duplicadas.push({ linha: linha, numero: ob.numero, id: chaves[k], imagensPendentes: pend.length });
+        res.duplicadas.push({ linha: linha, numero: ob.numero, id: dup.id, imagensPendentes: pend.length });
         return;
       }
       if (ids[ob.id]) { res.erros.push({ linha: linha, numero: ob.numero, id: ob.id, motivo: 'Id "' + ob.id + '" j\xE1 usado por outra quest\xE3o.' }); return; }
       if (!ob.comentario && (ob.alternativas.length || !ob.gabarito)) res.avisos.push({ linha: linha, numero: ob.numero, motivo: ob.alternativas.length ? 'Quest\xE3o sem coment\xE1rio.' : 'Quest\xE3o discursiva sem "gabarito" (resposta esperada) e sem "comentario".' });
-      chaves[k] = ob.id; ids[ob.id] = 1;
+      (chaves[k] = chaves[k] || []).push({ id: ob.id, sel: selIn });
+      ids[ob.id] = 1;
       if (n.novoTax) novosTax[n.novoTax.area + '|' + n.novoTax.subarea + '|' + n.novoTax.foco] = n.novoTax;
       linhas.push(linhaDeQuestao_(ob));
       ob.imagens.forEach(function (im) { res.paraUpload.push({ questaoId: ob.id, arquivo: im.arquivo, posicao: im.posicao, legenda: im.legenda }); });
@@ -1422,8 +1435,8 @@ function renomearProva_(u, p) {
   if (!minhas.length) throw erro_('Prova n\xE3o encontrada.');
   var ano = p.ano === undefined || p.ano === '' || p.ano === null ? minhas[0][I_ANO] : Number(p.ano);
   if (!ano || ano < 1900 || ano > 2100) throw erro_('Ano inv\xE1lido.');
-  var chaves = {};
-  idx.forEach(function (q) { if (q[I_PROVA] !== provaId) chaves[chaveQuestao_(q[I_INST], q[I_ANO], q[I_NUM])] = 1; });
+  var chaves = {}, selR = selecaoDasProvas_(), minhaSel = (selR[provaId] || {}).selecao || '';
+  idx.forEach(function (q) { if (q[I_PROVA] !== provaId && ((selR[q[I_PROVA]] || {}).selecao || '') === minhaSel) chaves[chaveQuestao_(q[I_INST], q[I_ANO], q[I_NUM])] = 1; });
   minhas.forEach(function (q) { if (chaves[chaveQuestao_(inst, ano, q[I_NUM])]) throw erro_('J\xE1 existe outra prova "' + inst + ' ' + ano + '" com a quest\xE3o ' + q[I_NUM] + '. Escolha outro nome.'); });
   comLock_(function () {
     var sh = sh_('Questoes'), n = sh.getLastRow() - 1;
@@ -1514,6 +1527,7 @@ function acrescentarTax_(lista) {
 // ───────────────────────────── Seleção da prova (R1, R+, Prova de Título) ─────────────────────────────
 
 var SELECOES = ['R1', 'R+', 'Prova de Título'];
+var SUFIXO_SEL = { 'R1': 'r1', 'R+': 'rmais', 'Prova de Título': 'titulo' };
 
 function selecoesSalvas_() {
   var d = lerTudo_('Config');
@@ -1549,6 +1563,19 @@ function selecaoDasProvas_() {
     if (s !== undefined) out[id] = { selecao: SELECOES.indexOf(s) >= 0 ? s : '', auto: false };
     else { var g = sugerirSelecao_(q[I_INST], id); out[id] = { selecao: g, auto: !!g }; }
   });
+  return out;
+}
+
+/** { provaId: texto } com a seleção das provas que dividem instituição + ano com outra (para diferenciá-las na tela). */
+function rotulosSelecao_() {
+  var sel = selecaoDasProvas_(), cont = {}, chave = {}, out = {};
+  indice_().forEach(function (q) {
+    var id = q[I_PROVA];
+    if (chave[id]) return;
+    chave[id] = slug_(q[I_INST]) + '|' + q[I_ANO];
+    cont[chave[id]] = (cont[chave[id]] || 0) + 1;
+  });
+  Object.keys(chave).forEach(function (id) { out[id] = cont[chave[id]] > 1 ? ((sel[id] || {}).selecao || '') : ''; });
   return out;
 }
 
@@ -2944,7 +2971,7 @@ async function mfMontarImpressao({ filtro, qtd, ordem, conteudo }) {
   let itens = [];
   for (let i = 0; i < ids.length; i += 50) itens.push(...(await ge("buscarQuestao", { ids: ids.slice(i, i + 50), revelar: !0 })).itens);
   let imgs = (q, pos) => Tc((q.imagens || []).filter(m => m.posicao === pos));
-  let rotulo = q => `${q.instituicao} ${q.ano} · Questão ${q.numero}`;
+  let rotulo = q => `${q.instituicao} ${q.ano}${q.selecaoRotulo ? " · " + q.selecaoRotulo : ""} · Questão ${q.numero}`;
   let disc = q => !(q.alternativas || []).length;
   let gab = q => q.anulada ? "Anulada" : (q.gabarito || "—");
   let mesma = new Set(itens.map(q => q.provaId)).size === 1;
@@ -3058,7 +3085,7 @@ async function mfImprimirQuadro(html) {
 }
 
 function mfTituloFiltro(a, provas, favoritas) {
-  let p = (a.provaId || []).map(id => { let x = provas.find(y => y.id === id); return x ? `${x.instituicao} ${x.ano}` : id; });
+  let p = (a.provaId || []).map(id => { let x = provas.find(y => y.id === id); return x ? `${x.instituicao} ${x.ano}${x.rotulo ? " · " + x.rotulo : ""}` : id; });
   let partes = [];
   p.length && partes.push(p.join(" + "));
   a.selecao.length && partes.push(a.selecao.join(" + "));
@@ -3215,11 +3242,11 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
     </div>
   </section>
 
-  <div id="resultado" class="mt-4">${Wi(4)}</div>`);let m=q=>r.querySelector(q),ms={},selTodas=()=>u?u.selecoes:["R1","R+","Prova de T\xEDtulo"],provasSel=()=>(u?u.provas:[]).filter(w=>!a.selecao.length||a.selecao.includes(w.selecao)),opcoes={selecao:()=>selTodas().map(x=>({v:x,t:x,n:(u?u.provas:[]).filter(w=>w.selecao===x).reduce((w,y)=>w+y.total,0)})),prova:()=>provasSel().map(w=>({v:w.id,t:`${w.instituicao} ${w.ano}`,n:w.total})),ano:()=>[...new Set(provasSel().map(w=>w.ano))].sort((w,y)=>y-w).map(w=>({v:String(w),t:String(w)})),sub:()=>Bh(a.area,[]).subareas.map(w=>({v:w,t:w})),foco:()=>Bh(a.area,a.subarea).focos.map(w=>({v:w,t:w}))},chave={selecao:"selecao",prova:"provaId",ano:"ano",sub:"subarea",foco:"foco"},podar=()=>{u&&(a.provaId=a.provaId.filter(w=>opcoes.prova().some(y=>y.v===w)),a.ano=a.ano.filter(w=>opcoes.ano().some(y=>y.v===String(w)))),a.subarea=a.subarea.filter(w=>opcoes.sub().some(y=>y.v===w)),a.foco=a.foco.filter(w=>opcoes.foco().some(y=>y.v===w))};for(let[id,vz,un]of[["selecao","Todas","sele\xE7\xF5es"],["prova","Todas","provas"],["ano","Todos","anos"],["sub","Todas","sub\xE1reas"],["foco","Todos","focos"]])ms[id]=mfMulti({raiz:r,id,opcoes:opcoes[id],selecionadas:()=>a[chave[id]],vazio:vz,unidade:un,aoMudar:q=>{a[chave[id]]=q,podar(),Object.values(ms).forEach(w=>w.atualizar()),o=1,A()}});function v(){podar(),Object.values(ms).forEach(q=>q.atualizar())}function _(){v()}async function A(){let q=m("#resultado");history.replaceState(null,"",p());try{let Q=await ge("listarQuestoes",{filtro:d(),pagina:o,tamanho:zv,facetas:!u});Q.facetas&&(u=Q.facetas,_()),l=Q.total;let w=Math.max(1,Math.ceil(l/zv));if(o>w)return o=w,A();m("#contagem").textContent=l?`${Gt(l,"quest\xE3o","quest\xF5es")} encontrada${l===1?"":"s"}`:"Nenhuma quest\xE3o encontrada",Q.itens.length?q.innerHTML=String(O`
+  <div id="resultado" class="mt-4">${Wi(4)}</div>`);let m=q=>r.querySelector(q),ms={},selTodas=()=>u?u.selecoes:["R1","R+","Prova de T\xEDtulo"],provasSel=()=>(u?u.provas:[]).filter(w=>!a.selecao.length||a.selecao.includes(w.selecao)),opcoes={selecao:()=>selTodas().map(x=>({v:x,t:x,n:(u?u.provas:[]).filter(w=>w.selecao===x).reduce((w,y)=>w+y.total,0)})),prova:()=>provasSel().map(w=>({v:w.id,t:`${w.instituicao} ${w.ano}${w.rotulo?" \xB7 "+w.rotulo:""}`,n:w.total})),ano:()=>[...new Set(provasSel().map(w=>w.ano))].sort((w,y)=>y-w).map(w=>({v:String(w),t:String(w)})),sub:()=>Bh(a.area,[]).subareas.map(w=>({v:w,t:w})),foco:()=>Bh(a.area,a.subarea).focos.map(w=>({v:w,t:w}))},chave={selecao:"selecao",prova:"provaId",ano:"ano",sub:"subarea",foco:"foco"},podar=()=>{u&&(a.provaId=a.provaId.filter(w=>opcoes.prova().some(y=>y.v===w)),a.ano=a.ano.filter(w=>opcoes.ano().some(y=>y.v===String(w)))),a.subarea=a.subarea.filter(w=>opcoes.sub().some(y=>y.v===w)),a.foco=a.foco.filter(w=>opcoes.foco().some(y=>y.v===w))};for(let[id,vz,un]of[["selecao","Todas","sele\xE7\xF5es"],["prova","Todas","provas"],["ano","Todos","anos"],["sub","Todas","sub\xE1reas"],["foco","Todos","focos"]])ms[id]=mfMulti({raiz:r,id,opcoes:opcoes[id],selecionadas:()=>a[chave[id]],vazio:vz,unidade:un,aoMudar:q=>{a[chave[id]]=q,podar(),Object.values(ms).forEach(w=>w.atualizar()),o=1,A()}});function v(){podar(),Object.values(ms).forEach(q=>q.atualizar())}function _(){v()}async function A(){let q=m("#resultado");history.replaceState(null,"",p());try{let Q=await ge("listarQuestoes",{filtro:d(),pagina:o,tamanho:zv,facetas:!u});Q.facetas&&(u=Q.facetas,_()),l=Q.total;let w=Math.max(1,Math.ceil(l/zv));if(o>w)return o=w,A();m("#contagem").textContent=l?`${Gt(l,"quest\xE3o","quest\xF5es")} encontrada${l===1?"":"s"}`:"Nenhuma quest\xE3o encontrada",Q.itens.length?q.innerHTML=String(O`
         <ul class="space-y-2">${Q.itens.map(y=>{let g=Ee.prefs.ocultarFoco!==!1&&y.status==="nova";return O`<li><button type="button" data-abrir="${y.id}" class="card flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-brand dark:hover:border-sky-400">
             <span class="shrink-0">${PA(y.anulada?"anulada":y.status)}</span>
             <span class="min-w-0 flex-1">
-              <span class="block text-sm font-semibold">${y.instituicao} ${y.ano} <span class="muted font-medium">· Questão ${y.numero}</span>${y.anulada?O` <span class="muted font-medium">· anulada</span>`:""}</span>
+              <span class="block text-sm font-semibold">${y.instituicao} ${y.ano}${y.selecaoRotulo?" \xB7 "+y.selecaoRotulo:""} <span class="muted font-medium">· Questão ${y.numero}</span>${y.anulada?O` <span class="muted font-medium">· anulada</span>`:""}</span>
               <span class="mt-1 flex flex-wrap items-center gap-2">${g?O`${Ee.prefs.ocultarArea?"":Vt(y.area)}<span class="muted inline-flex items-center gap-1.5 text-xs"><i data-lucide="eye-off" class="h-3.5 w-3.5" aria-hidden="true"></i>${Ee.prefs.ocultarArea?"\xC1rea e foco ocultos":"foco oculto"}</span>`:O`${Vt(y.area)}<span class="muted truncate text-xs">${y.subarea} › ${y.foco}</span>`}</span>
             </span>
             <span class="flex shrink-0 items-center gap-1.5 text-rose-500">${y.favorita?O`<i data-lucide="heart" class="h-4 w-4 fill-current" aria-hidden="true"></i><span class="sr-only">Favorita</span>`:""}${y.revisar?O`<i data-lucide="bookmark" class="h-4 w-4 fill-current text-sky-600" aria-hidden="true"></i><span class="sr-only">Revisar depois</span>`:""}</span>
@@ -3290,7 +3317,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
         <div class="min-w-0">
           <h1 class="text-lg font-bold text-brand dark:text-slate-100">Questão ${M.numero}</h1>
           <div class="mt-2 flex flex-wrap items-center gap-2">
-            ${kC("graduation-cap",`${M.instituicao} - ${M.ano}`)}
+            ${kC("graduation-cap",`${M.instituicao} - ${M.ano}${M.selecaoRotulo?" \xB7 "+M.selecaoRotulo:""}`)}
             ${me?Vt(M.area):""}
             ${Lt?O`<span class="text-sm font-semibold">${M.foco}</span><span class="muted text-xs">${M.subarea}</span>`:""}
             ${M.anulada?O`<span class="chip" style="--bg:#F1F5F9;--fg:#475569"><i data-lucide="ban" aria-hidden="true"></i>Anulada</span>`:""}
@@ -3365,7 +3392,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
       <h2 id="t-provas" class="h2 mb-3">Provas completas</h2>
       ${s.length?O`<ul class="divide-y divide-slate-100 dark:divide-slate-800">${s.map(p=>O`
         <li class="flex items-center justify-between gap-3 py-2.5"><span class="text-sm"><span class="font-semibold">${p.instituicao} ${p.ano}</span> <span class="muted">· ${Gt(p.total,"quest\xE3o","quest\xF5es")}${p.selecao?" · "+p.selecao:""}</span></span>
-          <span class="flex shrink-0 items-center gap-1"><button type="button" class="btn btn-outline btn-sm" data-prova="${p.id}" data-nome="${p.instituicao} ${p.ano}">Fazer prova</button><button type="button" class="btn btn-ghost btn-sm px-2" data-excluir-prova="${p.id}" data-nome="${p.instituicao} ${p.ano}" aria-label="Excluir a prova ${p.instituicao} ${p.ano}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button></span></li>`)}</ul>`:$n("files","Sem provas","Importe quest\xF5es para liberar as provas completas.",O`<a class="btn btn-primary mt-4" href="#/importar">Importar</a>`)}
+          <span class="flex shrink-0 items-center gap-1"><button type="button" class="btn btn-outline btn-sm" data-prova="${p.id}" data-nome="${p.instituicao} ${p.ano}${p.rotulo?" \xB7 "+p.rotulo:""}">Fazer prova</button><button type="button" class="btn btn-ghost btn-sm px-2" data-excluir-prova="${p.id}" data-nome="${p.instituicao} ${p.ano}${p.rotulo?" \xB7 "+p.rotulo:""}" aria-label="Excluir a prova ${p.instituicao} ${p.ano}${p.rotulo?" \xB7 "+p.rotulo:""}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button></span></li>`)}</ul>`:$n("files","Sem provas","Importe quest\xF5es para liberar as provas completas.",O`<a class="btn btn-primary mt-4" href="#/importar">Importar</a>`)}
     </section>
 
     <section class="card" aria-labelledby="t-sim">
@@ -3441,7 +3468,7 @@ ${a}</section>
         <span class="w-36 shrink-0 font-semibold">${v.instituicao} ${v.ano} · Q${v.numero}</span>
         <span class="min-w-0 flex-1 truncate">${Vt(v.area)} <span class="muted ml-1 text-xs">${v.foco}</span></span>
         <span class="muted hidden shrink-0 text-xs sm:inline">${v.marcada==="§"?"Discursiva · autoavaliada":(v.marcada?"Marcada "+v.marcada:"\u2014")+" · Gabarito "+(v.gabarito||"\u2014")}</span>
-        <span class="w-16 shrink-0 text-right font-semibold">${d(v.c)}</span></button></li>`):O`<li class="muted py-6 text-center text-sm">Nenhuma questão neste filtro.</li>`}`),window.lucide&&window.lucide.createIcons()}p(),r.addEventListener("click",async m=>{let v=m.target.closest("[data-f]");if(v)return l=v.dataset.f,r.querySelectorAll("[data-f]").forEach(A=>{let N=A===v;A.classList.toggle("btn-primary",N),A.classList.toggle("btn-outline",!N),A.setAttribute("aria-pressed",N)}),p();let _=m.target.closest("[data-abrir]");if(_)return sessionStorage.setItem("bq_fila",JSON.stringify({ids:B().map(A=>A.id),origem:"#/relatorio/"+n.sessaoId})),t("#/q/"+encodeURIComponent(_.dataset.abrir));if(m.target.closest("#b-refazer")){let A=m.target.closest("#b-refazer");A.disabled=!0;try{let N=await ge("iniciarSessao",{refazerDe:n.sessaoId,modo:"imediato"});t("#/sessao/"+N.sessaoId)}catch(N){be(N.message,"erro"),A.disabled=!1}}})}var $g={};xn($g,{render:()=>WA});var $A=["Cl\xEDnica M\xE9dica","Cirurgia Geral","Ginecologia e Obstetr\xEDcia","Pediatria","Preventiva","Radiologia"],KB=["A","B","C","D","E"],Ft=r=>r==null?"":String(r).trim();function Zv(r){let e={};return r.areas.forEach(t=>t.subareas.forEach(n=>{e[t.nome+"|"+n.nome]=new Set(n.focos)})),e}function JA(r,e,t,n){if(!$A.includes(e))return`\xC1rea inv\xE1lida: "${e}"`;let s=r[e+"|"+t];return s?s.has(n)?null:`Foco "${n}" n\xE3o existe em "${e} \u203A ${t}"`:`Sub\xE1rea "${t}" n\xE3o existe em "${e}"`}function zA(r,e){if(!r||typeof r!="object"||Array.isArray(r))return"Quest\xE3o inv\xE1lida (n\xE3o \xE9 um objeto).";let t=Number(r.numero);if(!Number.isInteger(t)||t<1)return'Campo "numero" deve ser um inteiro positivo.';if(!$A.includes(Ft(r.area)))return`\xC1rea inv\xE1lida: "${Ft(r.area)}"`;if(!Ft(r.subarea)||!Ft(r.foco))return'Informe "subarea" e "foco".';if(Ft(r.subarea).length>120||Ft(r.foco).length>120)return'"subarea" e "foco" aceitam no m\xE1ximo 120 caracteres.';if(!Ft(r.enunciado))return"Enunciado vazio.";let s=r.alternativas===void 0||r.alternativas===null?[]:r.alternativas;if(!Array.isArray(s)||s.length&&(s.length<4||s.length>5))return"Use 4 ou 5 alternativas (ou nenhuma, em quest\xE3o discursiva).";let i=r.imagens===void 0||r.imagens===null?[]:r.imagens;if(!Array.isArray(i))return'Campo "imagens" deve ser uma lista.';let a=["enunciado","comentario",...s.map((u,l)=>"alternativa_"+KB[l])];for(let u=0;u<i.length;u++){let l=i[u]||{};if(!Ft(l.arquivo))return`Imagem ${u+1} sem "arquivo".`;if(!a.includes(Ft(l.posicao)))return`Imagem "${Ft(l.arquivo)}": posi\xE7\xE3o inv\xE1lida "${Ft(l.posicao)}".`}for(let u=0;u<s.length;u++){let l=s[u]||{},B=Ft(l.letra).toUpperCase();if(B!==KB[u])return`Alternativas devem estar em ordem (esperado "${KB[u]}", veio "${B}").`;if(!Ft(l.texto)&&!i.some(d=>Ft(d.posicao)==="alternativa_"+B))return`Alternativa ${B} vazia (sem texto nem imagem).`}return!(r.anulada===!0||r.anulada==="true"||r.anulada===1)&&s.length&&!s.some((u,l)=>KB[l]===Ft(r.gabarito).toUpperCase())?`Gabarito "${Ft(r.gabarito).toUpperCase()}" n\xE3o corresponde a uma alternativa.`:null}function ew(r,e){let t={erroGeral:null,prova:null,total:0,validas:0,erros:[],imagens:[],novos:[]};if(!r||typeof r!="object")return t.erroGeral="O arquivo n\xE3o cont\xE9m um objeto JSON.",t;let n=r.prova||{};if(!Ft(n.instituicao))return t.erroGeral="prova.instituicao \xE9 obrigat\xF3rio.",t;if(!Number.isInteger(Number(n.ano))||Number(n.ano)<1950||Number(n.ano)>2100)return t.erroGeral="prova.ano inv\xE1lido.",t;if(!Array.isArray(r.questoes)||!r.questoes.length)return t.erroGeral='Lista "questoes" vazia ou ausente.',t;t.prova={instituicao:Ft(n.instituicao),ano:Number(n.ano),nome:Ft(n.nome),id:Ft(n.id)},t.total=r.questoes.length;let s=new Set;return r.questoes.forEach((i,a)=>{let o=zA(i,e);if(o){t.erros.push({linha:a+1,numero:i&&i.numero,id:i&&i.id,motivo:o});return}if(s.has(Number(i.numero))){t.erros.push({linha:a+1,numero:i.numero,id:i.id,motivo:`N\xFAmero ${i.numero} repetido no mesmo arquivo.`});return}s.add(Number(i.numero)),t.validas++,mfNotarFocoNovo(e,i,t),(i.imagens||[]).forEach(u=>t.imagens.push(Ft(u.arquivo)))}),t}var tw=40,jg=1572864,KA={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",svg:"image/svg+xml"},QB=r=>KA[r.toLowerCase().split(".").pop()||""]||null;function QA(r){let e=new Uint8Array(r),t="";for(let n=0;n<e.length;n+=32768)t+=String.fromCharCode.apply(null,e.subarray(n,n+32768));return btoa(t)}async function WA(r){await mfAtualizarTax();let e=Zv(Ee.taxonomia),t=null,n=!1;r.innerHTML=String(O`
+        <span class="w-16 shrink-0 text-right font-semibold">${d(v.c)}</span></button></li>`):O`<li class="muted py-6 text-center text-sm">Nenhuma questão neste filtro.</li>`}`),window.lucide&&window.lucide.createIcons()}p(),r.addEventListener("click",async m=>{let v=m.target.closest("[data-f]");if(v)return l=v.dataset.f,r.querySelectorAll("[data-f]").forEach(A=>{let N=A===v;A.classList.toggle("btn-primary",N),A.classList.toggle("btn-outline",!N),A.setAttribute("aria-pressed",N)}),p();let _=m.target.closest("[data-abrir]");if(_)return sessionStorage.setItem("bq_fila",JSON.stringify({ids:B().map(A=>A.id),origem:"#/relatorio/"+n.sessaoId})),t("#/q/"+encodeURIComponent(_.dataset.abrir));if(m.target.closest("#b-refazer")){let A=m.target.closest("#b-refazer");A.disabled=!0;try{let N=await ge("iniciarSessao",{refazerDe:n.sessaoId,modo:"imediato"});t("#/sessao/"+N.sessaoId)}catch(N){be(N.message,"erro"),A.disabled=!1}}})}var $g={};xn($g,{render:()=>WA});var $A=["Cl\xEDnica M\xE9dica","Cirurgia Geral","Ginecologia e Obstetr\xEDcia","Pediatria","Preventiva","Radiologia"],KB=["A","B","C","D","E"],Ft=r=>r==null?"":String(r).trim();function Zv(r){let e={};return r.areas.forEach(t=>t.subareas.forEach(n=>{e[t.nome+"|"+n.nome]=new Set(n.focos)})),e}function JA(r,e,t,n){if(!$A.includes(e))return`\xC1rea inv\xE1lida: "${e}"`;let s=r[e+"|"+t];return s?s.has(n)?null:`Foco "${n}" n\xE3o existe em "${e} \u203A ${t}"`:`Sub\xE1rea "${t}" n\xE3o existe em "${e}"`}function zA(r,e){if(!r||typeof r!="object"||Array.isArray(r))return"Quest\xE3o inv\xE1lida (n\xE3o \xE9 um objeto).";let t=Number(r.numero);if(!Number.isInteger(t)||t<1)return'Campo "numero" deve ser um inteiro positivo.';if(!$A.includes(Ft(r.area)))return`\xC1rea inv\xE1lida: "${Ft(r.area)}"`;if(!Ft(r.subarea)||!Ft(r.foco))return'Informe "subarea" e "foco".';if(Ft(r.subarea).length>120||Ft(r.foco).length>120)return'"subarea" e "foco" aceitam no m\xE1ximo 120 caracteres.';if(!Ft(r.enunciado))return"Enunciado vazio.";let s=r.alternativas===void 0||r.alternativas===null?[]:r.alternativas;if(!Array.isArray(s)||s.length&&(s.length<4||s.length>5))return"Use 4 ou 5 alternativas (ou nenhuma, em quest\xE3o discursiva).";let i=r.imagens===void 0||r.imagens===null?[]:r.imagens;if(!Array.isArray(i))return'Campo "imagens" deve ser uma lista.';let a=["enunciado","comentario",...s.map((u,l)=>"alternativa_"+KB[l])];for(let u=0;u<i.length;u++){let l=i[u]||{};if(!Ft(l.arquivo))return`Imagem ${u+1} sem "arquivo".`;if(!a.includes(Ft(l.posicao)))return`Imagem "${Ft(l.arquivo)}": posi\xE7\xE3o inv\xE1lida "${Ft(l.posicao)}".`}for(let u=0;u<s.length;u++){let l=s[u]||{},B=Ft(l.letra).toUpperCase();if(B!==KB[u])return`Alternativas devem estar em ordem (esperado "${KB[u]}", veio "${B}").`;if(!Ft(l.texto)&&!i.some(d=>Ft(d.posicao)==="alternativa_"+B))return`Alternativa ${B} vazia (sem texto nem imagem).`}return!(r.anulada===!0||r.anulada==="true"||r.anulada===1)&&s.length&&!s.some((u,l)=>KB[l]===Ft(r.gabarito).toUpperCase())?`Gabarito "${Ft(r.gabarito).toUpperCase()}" n\xE3o corresponde a uma alternativa.`:null}function ew(r,e){let t={erroGeral:null,prova:null,total:0,validas:0,erros:[],imagens:[],novos:[]};if(!r||typeof r!="object")return t.erroGeral="O arquivo n\xE3o cont\xE9m um objeto JSON.",t;let n=r.prova||{};if(!Ft(n.instituicao))return t.erroGeral="prova.instituicao \xE9 obrigat\xF3rio.",t;if(!Number.isInteger(Number(n.ano))||Number(n.ano)<1950||Number(n.ano)>2100)return t.erroGeral="prova.ano inv\xE1lido.",t;if(!Array.isArray(r.questoes)||!r.questoes.length)return t.erroGeral='Lista "questoes" vazia ou ausente.',t;t.prova={instituicao:Ft(n.instituicao),ano:Number(n.ano),nome:Ft(n.nome),id:Ft(n.id),selecao:Ft(n.selecao)},t.total=r.questoes.length;let s=new Set;return r.questoes.forEach((i,a)=>{let o=zA(i,e);if(o){t.erros.push({linha:a+1,numero:i&&i.numero,id:i&&i.id,motivo:o});return}if(s.has(Number(i.numero))){t.erros.push({linha:a+1,numero:i.numero,id:i.id,motivo:`N\xFAmero ${i.numero} repetido no mesmo arquivo.`});return}s.add(Number(i.numero)),t.validas++,mfNotarFocoNovo(e,i,t),(i.imagens||[]).forEach(u=>t.imagens.push(Ft(u.arquivo)))}),t}var tw=40,jg=1572864,KA={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",svg:"image/svg+xml"},QB=r=>KA[r.toLowerCase().split(".").pop()||""]||null;function QA(r){let e=new Uint8Array(r),t="";for(let n=0;n<e.length;n+=32768)t+=String.fromCharCode.apply(null,e.subarray(n,n+32768));return btoa(t)}async function WA(r){await mfAtualizarTax();let e=Zv(Ee.taxonomia),t=null,n=!1;r.innerHTML=String(O`
   <h1 class="h1">Importar questões</h1>
   <p class="muted mt-1 max-w-2xl text-sm">Envie arquivos <code>.json</code> ou um <code>.zip</code> com o JSON e a pasta <code>imagens/</code>.</p>
 
@@ -3457,7 +3484,7 @@ ${a}</section>
   <div id="area" class="mt-6" aria-live="polite"></div>`);mfLigarExportacao(r);let s=_=>r.querySelector(_),i=s("#area");async function a(_){let A=[],N=new Map,K=[],$=async(z,q)=>{let Q;try{Q=JSON.parse(z)}catch(w){K.push(`${q}: JSON inv\xE1lido (${w.message})`);return}if(!Q||typeof Q!="object"||Q.questoes===void 0&&Q.prova===void 0){K.push(`${q}: ignorado (n\xE3o parece um arquivo de quest\xF5es).`);return}A.push({origem:q,doc:Q,val:ew(Q,e)})};for(let z of _){let q=z.name.toLowerCase();if(q.endsWith(".json"))await $(await z.text(),z.name);else if(q.endsWith(".zip")){if(!window.JSZip){K.push(`${z.name}: a biblioteca JSZip n\xE3o carregou (verifique a internet).`);continue}try{let Q=await window.JSZip.loadAsync(z);for(let[w,y]of Object.entries(Q.files)){let g=w.split("/").pop();y.dir||w.startsWith("__MACOSX/")||g.startsWith("._")||(w.toLowerCase().endsWith(".json")?await $(await y.async("string"),`${z.name} \u203A ${w}`):QB(w)&&N.set(w.toLowerCase().replace(/\\/g,"/"),{nome:w,mime:QB(w),obter:()=>y.async("arraybuffer")}))}}catch(Q){K.push(`${z.name}: n\xE3o foi poss\xEDvel abrir o zip (${Q.message}).`)}}else QB(q)?N.set(q,{nome:z.name,mime:QB(q),obter:()=>z.arrayBuffer()}):K.push(`${z.name}: tipo de arquivo n\xE3o suportado.`)}return{docs:A,imagens:N,problemas:K}}function o(_,A){let N=String(A).toLowerCase().replace(/\\/g,"/").replace(/^\.?\//,"");if(_.has(N))return _.get(N);if(_.has("imagens/"+N))return _.get("imagens/"+N);for(let[$,z]of _)if($.endsWith("/"+N))return z;let K=N.split("/").pop();for(let[$,z]of _)if($.split("/").pop()===K)return z;return null}function u(){let{docs:_,imagens:A,problemas:N}=t,K=_.filter(z=>!z.val.erroGeral),$=K.reduce((z,q)=>z+q.val.validas,0);i.innerHTML=String(O`
       ${N.length?O`<div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" role="alert"><ul class="list-disc pl-5">${N.map(z=>O`<li>${z}</li>`)}</ul></div>`:""}
       <ul class="space-y-3">${_.map(z=>{let q=z.val,Q=[...new Set(q.imagens)].filter(w=>!o(A,w));return O`<li class="card">
-          <div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold">${q.prova?`${q.prova.instituicao} ${q.prova.ano}`:z.origem}</p><span class="muted text-xs">${z.origem}</span></div>
+          <div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold">${q.prova?`${q.prova.instituicao} ${q.prova.ano}${q.prova.selecao?" \xB7 "+q.prova.selecao:""}`:z.origem}</p><span class="muted text-xs">${z.origem}</span></div>
           ${q.erroGeral?O`<p class="mt-2 text-sm font-medium text-rose-600">${q.erroGeral}</p>`:O`
             <p class="mt-1 text-sm">${Gt(q.total,"quest\xE3o","quest\xF5es")} no arquivo · <span class="text-emerald-700 dark:text-emerald-400">${q.validas} válidas</span>${q.erros.length?O` · <span class="text-rose-600">${q.erros.length} com erro</span>`:""}</p>
             ${q.novos.length?O`<details class="mt-1"><summary class="cursor-pointer text-sm font-medium text-sky-700 dark:text-sky-300">Focos novos que ser\xE3o criados (${q.novos.length})</summary><ul class="mt-2 max-h-40 list-disc space-y-1 overflow-auto pl-5 text-xs">${q.novos.map(w=>O`<li>${w.area} \u203A ${w.subarea} \u203A ${w.foco}</li>`)}</ul></details>`:""}${q.imagens.length?O`<p class="muted mt-1 text-xs">Imagens referenciadas: ${new Set(q.imagens).size} · encontradas: ${new Set(q.imagens).size-Q.length}${Q.length?O` · <span class="font-medium text-amber-700 dark:text-amber-400">faltando: ${Q.join(", ")}</span>`:""}</p>`:""}
@@ -3472,7 +3499,7 @@ ${a}</section>
         <div><p class="mb-1 text-sm font-semibold" id="p1-t">Enviando questões…</p><div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="p1"><div class="h-full w-0 rounded-full bg-brand transition-all" id="p1-b"></div></div></div>
         <div id="bloco2" class="hidden"><p class="mb-1 text-sm font-semibold" id="p2-t">Enviando imagens…</p><div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="p2"><div class="h-full w-0 rounded-full bg-brand transition-all" id="p2-b"></div></div></div>
         <p class="muted text-xs">Não feche esta página até terminar. Se algo falhar, é seguro repetir a importação: duplicatas são ignoradas.</p>
-      </div>`);let z=(w,y,g,E)=>{let D=g?Math.round(y/g*100):100;s(`#${w}-b`).style.width=D+"%",s(`#${w}`).setAttribute("aria-valuenow",D),E&&(s(`#${w}-t`).textContent=E)},q=0;for(let w of N){let y=w.doc.questoes,g=w.val.prova.instituicao+" "+w.val.prova.ano;for(let E=0;E<y.length;E+=tw){let D=y.slice(E,E+tw);try{let T=await ge("importarLote",{prova:w.doc.prova,questoes:D,offset:E});$.importadas+=T.importadas,(T.focosNovos||[]).forEach(b=>$.focosNovos.push(b)),T.duplicadas.forEach(b=>$.duplicadas.push({...b,arquivo:g})),T.erros.forEach(b=>$.erros.push({...b,arquivo:g})),T.avisos.forEach(b=>$.avisos.push({...b,arquivo:g})),T.paraUpload.forEach(b=>$.upload.set(b.questaoId+"|"+b.arquivo,{...b,arquivoJson:w.origem}))}catch(T){$.falhas.push({arquivo:g,de:E+1,ate:E+D.length,motivo:T.message})}q+=D.length,z("p1",q,K,`Enviando quest\xF5es\u2026 ${q}/${K}`)}}z("p1",K,K,`Quest\xF5es enviadas: ${K}/${K}`);let Q=[...$.upload.values()];if(Q.length){s("#bloco2").classList.remove("hidden");let w=0,y=async E=>{let D=o(A,E.arquivo);if(!D){$.imgFalta.push(E);return}try{let T=await D.obter(),b=D.mime;(window.CONFIG||{}).FIREBASE&&({buf:T,mime:b}=await YA(T,b));let fe=Math.max(1,Math.ceil(T.byteLength/jg)),Ne=crypto.randomUUID().replace(/-/g,"");for(let et=0;et<fe;et++){let Ie=T.slice(et*jg,(et+1)*jg);await ge("uploadImagem",{questaoId:E.questaoId,arquivo:E.arquivo,mime:b,dados:QA(Ie),parte:et,totalPartes:fe,uploadId:Ne})}$.imgOk++}catch(T){$.imgFalha.push({...E,motivo:T.message})}},g=Array.from({length:2},async()=>{for(;Q.length;)await y(Q.shift()),w++,z("p2",w,$.upload.size,`Enviando imagens\u2026 ${w}/${$.upload.size}`)});await Promise.all(g),z("p2",$.upload.size,$.upload.size,`Imagens processadas: ${$.upload.size}`)}n=!1,mfAtualizarTax(),d($,N)}function B(_){let A=[`Relat\xF3rio de importa\xE7\xE3o \u2014 ${new Date().toLocaleString("pt-BR")}`,"",`Quest\xF5es importadas: ${_.importadas}`,`Duplicadas ignoradas: ${_.duplicadas.length}`,`Erros de valida\xE7\xE3o: ${_.erros.length}`,`Blocos que falharam: ${_.falhas.length}`,`Imagens enviadas: ${_.imgOk}`,`Imagens n\xE3o encontradas: ${_.imgFalta.length}`,`Imagens com falha: ${_.imgFalha.length}`,`Focos novos adicionados: ${_.focosNovos.length}`,""];return _.focosNovos.forEach(N=>A.push(`FOCO NOVO: ${N.area} \u203A ${N.subarea} \u203A ${N.foco}`)),_.erros.forEach(N=>A.push(`ERRO  [${N.arquivo}] linha ${N.linha}${N.numero?` (quest\xE3o ${N.numero})`:""}: ${N.motivo}`)),_.falhas.forEach(N=>A.push(`FALHA [${N.arquivo}] linhas ${N.de}-${N.ate}: ${N.motivo}`)),_.duplicadas.forEach(N=>A.push(`DUPLICADA [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}) \u2014 j\xE1 existe como ${N.id}`)),_.avisos.forEach(N=>A.push(`AVISO [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}): ${N.motivo}`)),_.imgFalta.forEach(N=>A.push(`IMAGEM N\xC3O ENCONTRADA: ${N.arquivo} (quest\xE3o ${N.questaoId})`)),_.imgFalha.forEach(N=>A.push(`IMAGEM COM FALHA: ${N.arquivo} (quest\xE3o ${N.questaoId}): ${N.motivo}`)),A.join(`
+      </div>`);let z=(w,y,g,E)=>{let D=g?Math.round(y/g*100):100;s(`#${w}-b`).style.width=D+"%",s(`#${w}`).setAttribute("aria-valuenow",D),E&&(s(`#${w}-t`).textContent=E)},q=0;for(let w of N){let y=w.doc.questoes,g=w.val.prova.instituicao+" "+w.val.prova.ano+(w.val.prova.selecao?" \xB7 "+w.val.prova.selecao:"");for(let E=0;E<y.length;E+=tw){let D=y.slice(E,E+tw);try{let T=await ge("importarLote",{prova:w.doc.prova,questoes:D,offset:E});$.importadas+=T.importadas,(T.focosNovos||[]).forEach(b=>$.focosNovos.push(b)),T.duplicadas.forEach(b=>$.duplicadas.push({...b,arquivo:g})),T.erros.forEach(b=>$.erros.push({...b,arquivo:g})),T.avisos.forEach(b=>$.avisos.push({...b,arquivo:g})),T.paraUpload.forEach(b=>$.upload.set(b.questaoId+"|"+b.arquivo,{...b,arquivoJson:w.origem}))}catch(T){$.falhas.push({arquivo:g,de:E+1,ate:E+D.length,motivo:T.message})}q+=D.length,z("p1",q,K,`Enviando quest\xF5es\u2026 ${q}/${K}`)}}z("p1",K,K,`Quest\xF5es enviadas: ${K}/${K}`);let Q=[...$.upload.values()];if(Q.length){s("#bloco2").classList.remove("hidden");let w=0,y=async E=>{let D=o(A,E.arquivo);if(!D){$.imgFalta.push(E);return}try{let T=await D.obter(),b=D.mime;(window.CONFIG||{}).FIREBASE&&({buf:T,mime:b}=await YA(T,b));let fe=Math.max(1,Math.ceil(T.byteLength/jg)),Ne=crypto.randomUUID().replace(/-/g,"");for(let et=0;et<fe;et++){let Ie=T.slice(et*jg,(et+1)*jg);await ge("uploadImagem",{questaoId:E.questaoId,arquivo:E.arquivo,mime:b,dados:QA(Ie),parte:et,totalPartes:fe,uploadId:Ne})}$.imgOk++}catch(T){$.imgFalha.push({...E,motivo:T.message})}},g=Array.from({length:2},async()=>{for(;Q.length;)await y(Q.shift()),w++,z("p2",w,$.upload.size,`Enviando imagens\u2026 ${w}/${$.upload.size}`)});await Promise.all(g),z("p2",$.upload.size,$.upload.size,`Imagens processadas: ${$.upload.size}`)}n=!1,mfAtualizarTax(),d($,N)}function B(_){let A=[`Relat\xF3rio de importa\xE7\xE3o \u2014 ${new Date().toLocaleString("pt-BR")}`,"",`Quest\xF5es importadas: ${_.importadas}`,`Duplicadas ignoradas: ${_.duplicadas.length}`,`Erros de valida\xE7\xE3o: ${_.erros.length}`,`Blocos que falharam: ${_.falhas.length}`,`Imagens enviadas: ${_.imgOk}`,`Imagens n\xE3o encontradas: ${_.imgFalta.length}`,`Imagens com falha: ${_.imgFalha.length}`,`Focos novos adicionados: ${_.focosNovos.length}`,""];return _.focosNovos.forEach(N=>A.push(`FOCO NOVO: ${N.area} \u203A ${N.subarea} \u203A ${N.foco}`)),_.erros.forEach(N=>A.push(`ERRO  [${N.arquivo}] linha ${N.linha}${N.numero?` (quest\xE3o ${N.numero})`:""}: ${N.motivo}`)),_.falhas.forEach(N=>A.push(`FALHA [${N.arquivo}] linhas ${N.de}-${N.ate}: ${N.motivo}`)),_.duplicadas.forEach(N=>A.push(`DUPLICADA [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}) \u2014 j\xE1 existe como ${N.id}`)),_.avisos.forEach(N=>A.push(`AVISO [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}): ${N.motivo}`)),_.imgFalta.forEach(N=>A.push(`IMAGEM N\xC3O ENCONTRADA: ${N.arquivo} (quest\xE3o ${N.questaoId})`)),_.imgFalha.forEach(N=>A.push(`IMAGEM COM FALHA: ${N.arquivo} (quest\xE3o ${N.questaoId}): ${N.motivo}`)),A.join(`
 `)}function d(_,A){let N=!_.erros.length&&!_.falhas.length&&!_.imgFalta.length&&!_.imgFalha.length,K=($,z,q)=>z.length?O`<details class="mt-3"><summary class="cursor-pointer text-sm font-medium ${q}">${$} (${z.length})</summary><ul class="mt-2 max-h-56 list-disc space-y-1 overflow-auto pl-5 text-xs">${z.slice(0,300).map(Q=>O`<li>${Q}</li>`)}</ul></details>`:"";i.innerHTML=String(O`
     <section class="card" aria-labelledby="t-rel">
       <h2 id="t-rel" class="flex items-center gap-2 text-base font-semibold"><i data-lucide="${N?"circle-check":"triangle-alert"}" class="h-5 w-5 ${N?"text-emerald-600":"text-amber-600"}" aria-hidden="true"></i>Importação concluída${N?"":" com pend\xEAncias"}</h2>
@@ -3531,7 +3558,7 @@ ${a}</section>
           <div class="w-24"><label class="label">Ano</label><input name="ano" class="input" inputmode="numeric" maxlength="4" value="${B.ano}" required></div>
           <div class="w-40"><label class="label">Sele\xE7\xE3o</label><select class="input" data-selecao="${B.id}"><option value="">Sem sele\xE7\xE3o</option>${(u.facetas.selecoes||[]).map(x=>O`<option ${x===B.selecao?ot("selected"):""}>${x}</option>`)}</select></div>
           <button type="submit" class="btn btn-outline">Salvar</button>
-          <button type="button" class="btn btn-ghost px-2 text-rose-700 dark:text-rose-400" data-excluir-prova="${B.id}" data-nome="${B.instituicao} ${B.ano}" aria-label="Excluir a prova ${B.instituicao} ${B.ano}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
+          <button type="button" class="btn btn-ghost px-2 text-rose-700 dark:text-rose-400" data-excluir-prova="${B.id}" data-nome="${B.instituicao} ${B.ano}${B.rotulo?" \xB7 "+B.rotulo:""}" aria-label="Excluir a prova ${B.instituicao} ${B.ano}${B.rotulo?" \xB7 "+B.rotulo:""}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
         </form>`)}`:O`<p class="muted text-sm">Nenhuma prova importada ainda.</p>`),jn()}catch(u){i.innerHTML=String(O`<p class="text-sm text-rose-600">${u.message}</p>`)}}i.addEventListener("change",async u=>{let l=u.target.closest("[data-selecao]");if(!l)return;try{await ge("definirSelecao",{provaId:l.dataset.selecao,selecao:l.value}),be("Sele\xE7\xE3o salva.","ok",1800)}catch(B){be(B.message,"erro")}}),i.addEventListener("click",u=>{let l=u.target.closest("[data-excluir-prova]");l&&mfExcluirProva(l.dataset.excluirProva,l.dataset.nome,a)}),i.addEventListener("submit",async u=>{u.preventDefault();let l=u.target,B=l.querySelector("button");B.disabled=!0;try{let d=await ge("renomearProva",{provaId:l.dataset.prova,instituicao:l.inst.value.trim(),ano:Number(l.ano.value)});be(`Prova renomeada em ${d.questoes} ${d.questoes===1?"quest\xE3o":"quest\xF5es"}.`,"ok"),await a()}catch(d){be(d.message,"erro",6e3),B.disabled=!1}}),a(),r.querySelector("#p-tema").value=e.tema||"auto";async function o(u){try{Ee.prefs=await ge("salvarPrefs",{prefs:u}),Ys(),be("Prefer\xEAncia salva.","ok",1800)}catch(l){be(l.message,"erro")}}r.querySelector("#p-foco").addEventListener("change",u=>o({ocultarFoco:u.target.checked})),r.querySelector("#p-area").addEventListener("change",u=>o({ocultarArea:u.target.checked})),r.querySelector("#p-tema").addEventListener("change",u=>o({tema:u.target.value})),r.querySelector("#b-sair").addEventListener("click",()=>{Ki(),location.hash="#/login",location.reload()})}crypto.randomUUID||(crypto.randomUUID=()=>("10000000-1000-4000-8000"+-1e11).replace(/[018]/g,r=>(r^crypto.getRandomValues(new Uint8Array(1))[0]&15>>r/4).toString(16)));Jv();document.addEventListener("bq:erro-nuvem",r=>be("Falha ao salvar na nuvem: "+(r.detail&&r.detail.message||"verifique as regras do Firestore e a conex\xE3o."),"erro",8e3));var ZA={"mf/flash":mfVFlash,"mf/estudar":mfVEstudar,"mf/importar":mfVImportarFlash,"mf/tax":mfVTax,"./views/login.js":Pg,"./views/dashboard.js":Fg,"./views/questoes.js":Lg,"./views/player.js":Gg,"./views/trilhas.js":qg,"./views/simulados.js":Hg,"./views/relatorio.js":Ug,"./views/importar.js":$g,"./views/ajustes.js":Jg},e1=[{re:/^\/login$/,mod:"./views/login.js",publica:!0,nav:null},{re:/^\/$/,mod:"./views/dashboard.js",nav:"inicio"},{re:/^\/questoes$/,mod:"./views/questoes.js",nav:"questoes"},{re:/^\/favoritas$/,mod:"./views/questoes.js",nav:"favoritas",opcoes:{modo:"favoritas"}},{re:/^\/q\/([^/]+)$/,mod:"./views/player.js",nav:"questoes",player:!0,params:["id"]},{re:/^\/sessao\/([^/]+)$/,mod:"./views/player.js",nav:"simulados",player:!0,params:["sessaoId"]},{re:/^\/trilhas$/,mod:"./views/trilhas.js",nav:"trilhas"},{re:/^\/simulados$/,mod:"./views/simulados.js",nav:"simulados"},{re:/^\/relatorio\/([^/]+)$/,mod:"./views/relatorio.js",nav:"simulados",params:["sessaoId"]},{re:/^\/importar$/,mod:"./views/importar.js",nav:"importar"},{re:/^\/ajustes$/,mod:"./views/ajustes.js",nav:"ajustes"},{re:/^\/flashcards$/,mod:"mf/flash",nav:"flashcards"},{re:/^\/flashcards\/estudar$/,mod:"mf/estudar",nav:"flashcards",player:!0},{re:/^\/flashcards\/importar$/,mod:"mf/importar",nav:"flashcards"},{re:/^\/taxonomia$/,mod:"mf/tax",nav:"ajustes"}],nw=[{id:"inicio",href:"#/",icone:"layout-dashboard",rotulo:"In\xEDcio"},{id:"questoes",href:"#/questoes",icone:"list-checks",rotulo:"Quest\xF5es"},{id:"trilhas",href:"#/trilhas",icone:"route",rotulo:"Trilhas"},{id:"simulados",href:"#/simulados",icone:"timer",rotulo:"Simulados"},{id:"favoritas",href:"#/favoritas",icone:"heart",rotulo:"Favoritas"},{id:"flashcards",href:"#/flashcards",icone:"layers",rotulo:"Flashcards"}],WB=null,cc=0;function t1(){let r=location.hash.replace(/^#/,"")||"/",[e,t]=r.split("?");return{caminho:decodeURI(e)||"/",query:Object.fromEntries(new URLSearchParams(t||""))}}function lc(r){location.hash=r}function YB(){let r=!!Ee.usuario;document.getElementById("shell").innerHTML=String(O`
   <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
     <div class="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
