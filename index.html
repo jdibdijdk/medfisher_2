@@ -2907,17 +2907,42 @@ async function mfUrlArquivo(arq) {
   return URL.createObjectURL(new Blob(partes, { type: arq.mime }));
 }
 
+/** Converte um link (YouTube, Drive, Vimeo, arquivo direto…) em algo que toca dentro do site. */
+function mfEmbed(u) {
+  let x; try { x = new URL(u); } catch { return null; }
+  const h = x.hostname.replace(/^www\./, ""), p = x.pathname, q = x.searchParams;
+  let m;
+  if (h === "youtu.be" && (m = /^\/([\w-]{6,})/.exec(p))) return { k: "video-iframe", src: `https://www.youtube.com/embed/${m[1]}` + (q.get("t") ? `?start=${parseInt(q.get("t"))||0}` : "") };
+  if (/(^|\.)youtube(-nocookie)?\.com$/.test(h)) {
+    if (q.get("v")) return { k: "video-iframe", src: `https://www.youtube.com/embed/${q.get("v")}` + (q.get("list") ? `?list=${q.get("list")}` : "") };
+    if ((m = /^\/(?:shorts|embed|live|v)\/([\w-]{6,})/.exec(p))) return { k: "video-iframe", src: `https://www.youtube.com/embed/${m[1]}` };
+    if (p === "/playlist" && q.get("list")) return { k: "video-iframe", src: `https://www.youtube.com/embed/videoseries?list=${q.get("list")}` };
+  }
+  if (h === "vimeo.com" && (m = /^\/(?:.*\/)?(\d{5,})/.exec(p))) return { k: "video-iframe", src: `https://player.vimeo.com/video/${m[1]}` };
+  if (h === "drive.google.com") {
+    if ((m = /^\/file\/d\/([\w-]+)/.exec(p)) || (m = /^\/(?:open|uc)$/.test(p) && q.get("id") ? [0, q.get("id")] : null)) return { k: "doc", src: `https://drive.google.com/file/d/${m[1]}/preview` };
+    if ((m = /^\/drive\/folders\/([\w-]+)/.exec(p))) return { k: "doc", src: `https://drive.google.com/embeddedfolderview?id=${m[1]}#list` };
+  }
+  if (h === "docs.google.com" && (m = /^\/(document|presentation|spreadsheets)\/d\/([\w-]+)/.exec(p))) return { k: "doc", src: `https://docs.google.com/${m[1]}/d/${m[2]}/${m[1] === "presentation" ? "embed" : "preview"}` };
+  if (/\.(mp4|webm|mov|m4v|ogv)$/i.test(p)) return { k: "video", src: u };
+  if (/\.(mp3|m4a|wav|ogg|oga|aac)$/i.test(p)) return { k: "audio", src: u };
+  if (/\.pdf$/i.test(p)) return { k: "doc", src: u };
+  return { k: "doc", src: u };
+}
+
 /** Abre a aula: vídeo, áudio e PDF tocam/mostram no próprio app; links abrem em nova aba (YouTube embutido). */
 async function mfAbrirAula(a) {
   let url = null;
   try { if (a.arquivo) url = await mfUrlArquivo(a.arquivo); }
   catch (x) { return be(x.message, "erro", 6000); }
-  const yt = a.url && /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{6,})/.exec(a.url);
+  const emb = !url && a.url ? mfEmbed(a.url) : null;
   let corpo;
   if (a.tipo === "video" && url) corpo = O`<video controls playsinline class="w-full rounded-xl bg-black" src="${url}"></video>`;
   else if (a.tipo === "audio" && url) corpo = O`<audio controls class="w-full" src="${url}"></audio>`;
   else if (a.tipo === "pdf" && url) corpo = O`<iframe title="${a.titulo}" src="${url}" class="h-[70vh] w-full rounded-xl border border-slate-200"></iframe>`;
-  else if (yt) corpo = O`<iframe title="${a.titulo}" src="https://www.youtube.com/embed/${yt[1]}" class="aspect-video w-full rounded-xl" allow="accelerometer; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+  else if (emb && emb.k === "video") corpo = O`<video controls playsinline class="w-full rounded-xl bg-black" src="${emb.src}"></video>`;
+  else if (emb && emb.k === "audio") corpo = O`<audio controls class="w-full" src="${emb.src}"></audio>`;
+  else if (emb) corpo = O`<iframe title="${a.titulo}" src="${emb.src}" class="${emb.k === "doc" ? "h-[70vh]" : "aspect-video"} w-full rounded-xl border border-slate-200" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
   else corpo = O`<p class="text-sm">Conteúdo disponível no link.</p>`;
   const botoes = O`<div class="flex flex-wrap gap-2">${url ? O`<a class="btn btn-outline btn-sm" href="${url}" download="${a.arquivo.nome}"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Baixar</a>` : ""}${a.url ? O`<a class="btn btn-outline btn-sm" href="${a.url}" target="_blank" rel="noopener"><i data-lucide="external-link" class="h-4 w-4" aria-hidden="true"></i>Abrir link</a>` : ""}</div>`;
   await pn({ titulo: a.titulo, largo: !0, confirmar: "Fechar", cancelar: null, corpo: O`<div class="space-y-3">${mfCaminho(a)}${corpo}${botoes}</div>` });
