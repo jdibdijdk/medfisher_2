@@ -77,6 +77,17 @@
     body[data-rota="player"]::before { content: ""; position: fixed; inset: 0 0 auto 0; height: 70vh; z-index: -1; pointer-events: none;
       background: linear-gradient(180deg, var(--g1, #D3E4F7) 0%, color-mix(in srgb, var(--g1, #D3E4F7) 45%, white) 48%, rgb(255 255 255 / 0) 100%); transition: background .4s; }
     .dark body[data-rota="player"]::before { background: linear-gradient(180deg, color-mix(in srgb, var(--g1, #D3E4F7) 20%, #0f172a) 0%, rgb(15 23 42 / 0) 100%); }
+    /* Ajustes só para telas de celular (o desktop não muda). */
+    @media (max-width: 639px) {
+      .grid > * { min-width: 0; }
+      details[data-k] > summary { list-style: none; }
+      details[data-k] > summary::-webkit-details-marker { display: none; }
+      details[data-k] > summary::before { content: "›"; flex: none; display: inline-block; width: .9rem; margin-right: .35rem; text-align: center; font-weight: 700; color: #94a3b8; transition: transform .15s; }
+      details[data-k][open] > summary::before { transform: rotate(90deg); }
+      details[data-k] > summary:not(.flex) { display: flex; align-items: center; gap: .25rem; }
+      details[data-k] > summary > :first-child { margin-right: auto; flex: 1 1 12rem; min-width: 0; }
+      details[data-k] > summary > h2, details[data-k] > summary > h3 { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+    }
     .chip { display: inline-flex; align-items: center; gap: .375rem; border-radius: 9999px; padding: .25rem .75rem; font-size: .75rem; font-weight: 600; line-height: 1.1rem; background: var(--bg); color: var(--fg); white-space: nowrap; }
     .chip svg { width: .95rem; height: .95rem; stroke-width: 2; flex: none; }
     .dark .chip { background: color-mix(in srgb, var(--fg) 24%, transparent); color: color-mix(in srgb, var(--fg) 40%, white); }
@@ -3085,7 +3096,7 @@ function mfEmbed(u) {
 
 /** Etiquetas da aula: Aula Flash e Parte x/y. */
 function mfEtiquetasAula(a) {
-  const cls = "rounded-full px-2 py-0.5 text-[11px] font-semibold";
+  const cls = "rounded-full px-2 py-0.5 text-[11px] font-semibold max-sm:order-3";
   return O`${a.flash ? O`<span class="${cls} bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Aula Flash</span>` : ""}${a.parte ? O`<span class="${cls} bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">Parte ${a.parte}${a.totalPartes ? "/" + a.totalPartes : ""}</span>` : ""}`;
 }
 
@@ -3208,10 +3219,10 @@ var mfVAulas = { render: async function (r, { query: qy }) {
   const grupo = (k, sid) => sequencia(k).filter(a => (a.subfocoId || "") === (sid || ""));
   const btn = (attr, icone, rot, extra = "") => !mfAdmin() ? "" : O`<button type="button" class="btn btn-ghost btn-sm px-2" ${ot(attr)} aria-label="${rot}" title="${rot}" ${extra ? ot(extra) : ""}><i data-lucide="${icone}" class="h-4 w-4" aria-hidden="true"></i></button>`;
   const linhaAula = (a, { setas = null, contexto = false } = {}) => O`<li class="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 text-sm">
-    <span class="muted inline-flex w-14 shrink-0 items-center gap-1.5 text-xs"><i data-lucide="${MF_ICONE_TIPO[a.tipo]}" class="h-4 w-4" aria-hidden="true"></i>${MF_ROTULO_TIPO[a.tipo]}</span>
-    <button type="button" class="min-w-0 flex-1 truncate text-left font-medium hover:underline" data-abrir-aula="${a.id}">${a.titulo}</button>
-    ${mfEtiquetasAula(a)}${contexto ? O`<span class="muted text-xs">${(cursoPorId(a.cursoId) || {}).nome} · ${(moduloPorId(a.moduloId) || {}).nome}</span>` : ""}
-    <span class="flex shrink-0 gap-0.5">
+    <span class="muted inline-flex w-14 shrink-0 items-center gap-1.5 text-xs max-sm:order-2 max-sm:w-auto"><i data-lucide="${MF_ICONE_TIPO[a.tipo]}" class="h-4 w-4" aria-hidden="true"></i>${MF_ROTULO_TIPO[a.tipo]}</span>
+    <button type="button" class="min-w-0 flex-1 truncate text-left font-medium hover:underline max-sm:order-1 max-sm:w-full max-sm:flex-none max-sm:overflow-visible max-sm:whitespace-normal max-sm:break-words" data-abrir-aula="${a.id}">${a.titulo}</button>
+    ${mfEtiquetasAula(a)}${contexto ? O`<span class="muted text-xs max-sm:order-6 max-sm:w-full">${(cursoPorId(a.cursoId) || {}).nome} · ${(moduloPorId(a.moduloId) || {}).nome}</span>` : ""}
+    <span class="flex shrink-0 gap-0.5 max-sm:order-5 max-sm:ml-auto">
       ${setas && mfAdmin() ? O`${btn(`data-mover="${a.id}|-1"`, "chevron-up", "Subir", setas.primeiro ? "disabled" : "")}${btn(`data-mover="${a.id}|1"`, "chevron-down", "Descer", setas.ultimo ? "disabled" : "")}` : ""}
       ${btn(`data-editar-aula="${a.id}"`, "pencil", "Editar")}${btn(`data-excluir-aula="${a.id}"`, "trash-2", "Excluir")}
     </span></li>`;
@@ -3359,8 +3370,13 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
         <div class="h-full rounded-full" style="width:${t}%;background:${e}"></div></div>
       <span class="w-14 text-right text-sm font-semibold tabular-nums">${kt(r.perc)}</span>
     </div>
-    <span class="muted w-28 text-xs tabular-nums sm:text-right">${r.respondidas}/${r.totalBanco} resolvidas</span>
-  </li>`}function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64,d=o.perc===null?0:o.perc,p=106*d/100,m=126-p;return`<g><title>${dh(o.inicio)}: ${o.respostas} respostas, ${kt(o.perc)} de acerto</title>
+    <span class="muted text-xs tabular-nums sm:w-28 sm:text-right">${r.respondidas}/${r.totalBanco} resolvidas</span>
+  </li>`}function NAm(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64,d=o.perc===null?0:o.perc,p=170*d/100,m=194-p;return`<g><title>${dh(o.inicio)}: ${o.respostas} respostas, ${kt(o.perc)} de acerto</title>
+      <rect x="${l}" y="24" width="${B}" height="170" rx="8" class="fill-slate-100 dark:fill-slate-800"/>
+      <rect x="${l}" y="${m}" width="${B}" height="${Math.max(p,o.respostas?3:0)}" rx="8" fill="#1E3A6B"/>
+      <text x="${l+B/2}" y="220" text-anchor="middle" font-size="15" class="fill-slate-500 dark:fill-slate-400">${dh(o.inicio)}</text>
+      <text x="${l+B/2}" y="17" text-anchor="middle" font-size="15" font-weight="600" class="fill-slate-600 dark:fill-slate-300">${o.respostas||""}</text></g>`}).join("");return O`<svg viewBox="0 0 ${560} ${232}" class="block w-full" role="img" aria-label="Evolução semanal: percentual de acerto por semana (barras) e número de respostas (acima das barras)">${ot(a)}</svg>`}
+function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64,d=o.perc===null?0:o.perc,p=106*d/100,m=126-p;return`<g><title>${dh(o.inicio)}: ${o.respostas} respostas, ${kt(o.perc)} de acerto</title>
       <rect x="${l}" y="20" width="${B}" height="106" rx="6" class="fill-slate-100 dark:fill-slate-800"/>
       <rect x="${l}" y="${m}" width="${B}" height="${Math.max(p,o.respostas?2:0)}" rx="6" fill="#1E3A6B"/>
       <text x="${l+B/2}" y="142" text-anchor="middle" font-size="10" class="fill-slate-500 dark:fill-slate-400">${dh(o.inicio)}</text>
@@ -3385,7 +3401,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
   <div class="mt-6 grid gap-6 md:grid-cols-2">
     <section class="card" aria-labelledby="t-evo">
       <h2 id="t-evo" class="h2 mb-3">Evolução semanal</h2>
-      ${s?O`<p class="muted py-6 text-center text-sm">Responda questões para ver sua evolução.</p>`:NA(t.evolucao)}
+      ${s?O`<p class="muted py-6 text-center text-sm">Responda questões para ver sua evolução.</p>`:O`<div class="sm:hidden">${NAm(t.evolucao)}</div><div class="hidden sm:block">${NA(t.evolucao)}</div>`}
     </section>
 
     <section class="card" aria-labelledby="t-fracos">
@@ -3593,7 +3609,7 @@ var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334
         </div>
         <fieldset><legend class="label">Áreas e distribuição</legend>
           <ul class="space-y-2">${Yr.map(p=>O`<li class="flex items-center gap-3">
-            <label class="inline-flex flex-1 items-center gap-2"><input type="checkbox" class="h-4 w-4 accent-brand" data-area-sel="${p}">${Vt(p)}<span class="muted text-xs">(${i[p]||0})</span></label>
+            <label class="inline-flex flex-1 items-center gap-2 max-sm:min-w-0 max-sm:flex-wrap max-sm:gap-y-1"><input type="checkbox" class="h-4 w-4 accent-brand" data-area-sel="${p}">${Vt(p)}<span class="muted text-xs">(${i[p]||0})</span></label>
             <label class="sr-only" for="n-${p}">Questões de ${p}</label>
             <input id="n-${p}" type="number" min="0" max="300" class="input w-20 py-1.5" data-area-n="${p}" value="0" disabled></li>`)}</ul>
           <div class="mt-2 flex items-center justify-between"><button type="button" class="btn btn-ghost btn-sm" id="b-igual">Distribuir igualmente</button><span class="muted text-xs" id="soma"></span></div>
