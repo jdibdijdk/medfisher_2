@@ -217,7 +217,8 @@ var ABAS = {
   Caderno: { cols: ['usuario', 'id', 'questao_id', 'area', 'subarea', 'foco', 'texto', 'criado_em'], num: [] },
   Cursos: { cols: ['id', 'nome', 'criado_em'], num: [] },
   Modulos: { cols: ['id', 'curso_id', 'nome', 'criado_em'], num: [] },
-  Aulas: { cols: ['id', 'curso_id', 'modulo_id', 'area', 'subarea', 'foco', 'titulo', 'tipo', 'url', 'arquivo_id', 'arquivo_partes', 'arquivo_mime', 'arquivo_nome', 'arquivo_tamanho', 'criado_em'], num: ['arquivo_partes', 'arquivo_tamanho'] },
+  Aulas: { cols: ['id', 'curso_id', 'modulo_id', 'area', 'subarea', 'foco', 'titulo', 'tipo', 'url', 'arquivo_id', 'arquivo_partes', 'arquivo_mime', 'arquivo_nome', 'arquivo_tamanho', 'criado_em', 'subfoco_id', 'ordem', 'parte', 'total_partes', 'flash'], num: ['arquivo_partes', 'arquivo_tamanho', 'ordem', 'parte', 'total_partes'] },
+  Subfocos: { cols: ['id', 'area', 'subarea', 'foco', 'nome', 'ordem', 'criado_em'], num: ['ordem'] },
 };
 
 // Posições no índice leve de questões
@@ -378,6 +379,10 @@ var ACOES = {
   criarAula: criarAula_,
   editarAula: editarAula_,
   excluirAula: excluirAula_,
+  criarSubfoco: criarSubfoco_,
+  renomearSubfoco: renomearSubfoco_,
+  excluirSubfoco: excluirSubfoco_,
+  ordenarAulas: ordenarAulas_,
   editarQuestao: editarQuestao_,
   taxonomia: taxonomia_,
   taxonomiaUso: taxonomiaUso_,
@@ -1712,7 +1717,7 @@ function listarCaderno_(u) {
     if (String(r[0]) !== u) return;
     var qid = String(r[2]), pos = idx[qid], q = pos === undefined ? null : questao_(qid);
     notas.push({
-      id: String(r[1]), questaoId: qid, area: String(r[3]), subarea: String(r[4]), foco: String(r[5]), texto: String(r[6]), criadoEm: String(r[7]),
+      id: String(r[1]), questaoId: qid, area: q ? q.area : String(r[3]), subarea: q ? q.subarea : String(r[4]), foco: q ? q.foco : String(r[5]), texto: String(r[6]), criadoEm: String(r[7]),
       questao: q ? { instituicao: q.instituicao, ano: q.ano, numero: q.numero, enunciado: q.enunciado, anulada: q.anulada, selecaoRotulo: q.selecaoRotulo || '' } : null
     });
   });
@@ -1768,7 +1773,7 @@ function aulaDeLinha_(r) {
     id: String(r[0]), cursoId: String(r[1]), moduloId: String(r[2]), area: String(r[3]), subarea: String(r[4]), foco: String(r[5]),
     titulo: String(r[6]), tipo: String(r[7]), url: String(r[8]),
     arquivo: String(r[9]) ? { id: String(r[9]), partes: Number(r[10]) || 0, mime: String(r[11]), nome: String(r[12]), tamanho: Number(r[13]) || 0 } : null,
-    criadoEm: String(r[14])
+    criadoEm: String(r[14]), subfocoId: String(r[15] || ''), ordem: Number(r[16]) || 0, parte: Number(r[17]) || 0, totalPartes: Number(r[18]) || 0, flash: String(r[19]) === '1'
   };
 }
 
@@ -1777,7 +1782,8 @@ function listarAulas_(u) {
   return {
     cursos: lerTudo_('Cursos').map(function (r) { return { id: String(r[0]), nome: String(r[1]), criadoEm: String(r[2]) }; }),
     modulos: lerTudo_('Modulos').map(function (r) { return { id: String(r[0]), cursoId: String(r[1]), nome: String(r[2]), criadoEm: String(r[3]) }; }),
-    aulas: lerTudo_('Aulas').map(aulaDeLinha_)
+    aulas: lerTudo_('Aulas').map(aulaDeLinha_),
+    subfocos: lerTudo_('Subfocos').map(function (r) { return { id: String(r[0]), area: String(r[1]), subarea: String(r[2]), foco: String(r[3]), nome: String(r[4]), ordem: Number(r[5]) || 0 }; })
   };
 }
 
@@ -1848,12 +1854,16 @@ function excluirModulo_(u, p) {
 }
 
 /** Valida os campos de uma aula. arq = { id, partes, mime, nome, tamanho } do arquivo já enviado, ou null. */
+function numAula_(x, max) { var n = Math.floor(Number(x)); return isFinite(n) && n > 0 ? Math.min(n, max) : 0; }
+
+/** Valida os campos de uma aula. arq = { id, partes, mime, nome, tamanho } do arquivo já enviado, ou null. */
 function validarAula_(p, manterExistente) {
   var titulo = str_(p.titulo).slice(0, 160), tipo = str_(p.tipo), url = str_(p.url).slice(0, 2000);
   var arq = p.arquivo && typeof p.arquivo === 'object' ? p.arquivo : null;
+  var area = str_(p.area), subarea = str_(p.subarea), foco = str_(p.foco);
   if (!titulo) throw erro_('Dê um título à aula.');
   if (TIPOS_AULA.indexOf(tipo) < 0) throw erro_('Tipo de aula inválido.');
-  var e = erroTaxAula_(str_(p.area), str_(p.subarea), str_(p.foco));
+  var e = erroTaxAula_(area, subarea, foco);
   if (e) throw erro_(e);
   if (url && !/^https?:\\/\\//i.test(url)) throw erro_('O link precisa começar com https://');
   if (tipo === 'link') {
@@ -1865,24 +1875,47 @@ function validarAula_(p, manterExistente) {
   } else if (!url && !manterExistente) {
     throw erro_('Envie o arquivo ou informe um link.');
   }
+  var parte = numAula_(p.parte, 99), total = numAula_(p.totalPartes, 99);
+  if (total && !parte) throw erro_('Informe qual parte é esta aula.');
+  if (parte && total && parte > total) throw erro_('A parte não pode ser maior que o total de partes.');
+  var sub = str_(p.subfocoId);
+  if (sub) {
+    var rs = linhaPorId_('Subfocos', sub);
+    if (!rs || String(rs[1]) !== area || String(rs[2]) !== subarea || String(rs[3]) !== foco) throw erro_('Esse subfoco não pertence ao foco da aula.');
+  }
   return {
     titulo: titulo, tipo: tipo, url: arq ? '' : url, arquivo: arq,
-    area: str_(p.area), subarea: str_(p.subarea), foco: str_(p.foco)
+    area: area, subarea: subarea, foco: foco,
+    parte: parte, totalPartes: total, flash: p.flash === true || p.flash === 1 || p.flash === '1', subfocoId: sub
   };
+}
+
+function proximaOrdemAula_(area, sub, foco) {
+  var m = 0;
+  lerTudo_('Aulas').forEach(function (r) {
+    if (String(r[3]) === area && String(r[4]) === sub && String(r[5]) === foco) m = Math.max(m, Number(r[16]) || 0);
+  });
+  return m + 1;
+}
+
+function linhaAula_(id, cursoId, moduloId, v, a, criado, ordem) {
+  return [id, cursoId, moduloId, v.area, v.subarea, v.foco, v.titulo, v.tipo, v.url,
+    a ? a.id : '', a ? Number(a.partes) || 0 : 0, a ? String(a.mime || '') : '', a ? String(a.nome || '').slice(0, 200) : '', a ? Number(a.tamanho) || 0 : 0, criado,
+    v.subfocoId, ordem, v.parte, v.totalPartes, v.flash ? '1' : ''];
 }
 
 function criarAula_(u, p) {
   var v = validarAula_(p), cursoId = str_(p.cursoId), moduloId = str_(p.moduloId);
   var modulo = linhaPorId_('Modulos', moduloId);
   if (!linhaPorId_('Cursos', cursoId) || !modulo || String(modulo[1]) !== cursoId) throw erro_('Curso ou módulo não encontrado.');
-  var a = v.arquivo, id = novoId_('A'), criado = agora_();
+  var id = novoId_('A'), criado = agora_();
   comLock_(function () {
-    anexar_(sh_('Aulas'), [[id, cursoId, moduloId, v.area, v.subarea, v.foco, v.titulo, v.tipo, v.url,
-      a ? a.id : '', a ? Number(a.partes) || 0 : 0, a ? String(a.mime || '') : '', a ? String(a.nome || '').slice(0, 200) : '', a ? Number(a.tamanho) || 0 : 0, criado]]);
+    anexar_(sh_('Aulas'), [linhaAula_(id, cursoId, moduloId, v, v.arquivo, criado, proximaOrdemAula_(v.area, v.subarea, v.foco))]);
   });
   return { id: id };
 }
 
+/** Atualiza a aula. Devolve o arquivo anterior (se foi trocado ou removido), para o app apagar. */
 /** Atualiza a aula. Devolve o arquivo anterior (se foi trocado ou removido), para o app apagar. */
 function editarAula_(u, p) {
   var id = str_(p.id), v = validarAula_(p, !!p.manterArquivo), anterior = null;
@@ -1894,12 +1927,73 @@ function editarAula_(u, p) {
       var manter = !v.arquivo && !!atual.arquivo && v.tipo !== 'link' && !!p.manterArquivo;
       if (atual.arquivo && !manter) anterior = atual.arquivo.id + ':' + atual.arquivo.partes;
       var arq = manter ? atual.arquivo : v.arquivo;
-      var linha = [id, atual.cursoId, atual.moduloId, v.area, v.subarea, v.foco, v.titulo, v.tipo, v.url,
-        arq ? arq.id : '', arq ? Number(arq.partes) || 0 : 0, arq ? String(arq.mime || '') : '', arq ? String(arq.nome || '').slice(0, 200) : '', arq ? Number(arq.tamanho) || 0 : 0, atual.criadoEm];
+      var mudouGrupo = atual.area !== v.area || atual.subarea !== v.subarea || atual.foco !== v.foco || atual.subfocoId !== v.subfocoId;
+      var ordem = mudouGrupo ? proximaOrdemAula_(v.area, v.subarea, v.foco) : atual.ordem;
+      var linha = linhaAula_(id, atual.cursoId, atual.moduloId, v, arq, atual.criadoEm, ordem);
       sh_('Aulas').getRange(i + 2, 1, 1, linha.length).setValues([linha]);
       return { id: id, anterior: anterior };
     }
     throw erro_('Aula não encontrada.');
+  });
+}
+
+function criarSubfoco_(u, p) {
+  var area = str_(p.area), sub = str_(p.subarea), foco = str_(p.foco), nome = str_(p.nome).slice(0, 120);
+  if (!nome) throw erro_('Dê um nome ao subfoco.');
+  var e = erroTaxAula_(area, sub, foco);
+  if (e) throw erro_(e);
+  return comLock_(function () {
+    var n = 0;
+    lerTudo_('Subfocos').forEach(function (r) {
+      if (String(r[1]) !== area || String(r[2]) !== sub || String(r[3]) !== foco) return;
+      n = Math.max(n, Number(r[5]) || 0);
+      if (String(r[4]).toLowerCase() === nome.toLowerCase()) throw erro_('Já existe um subfoco com esse nome neste foco.');
+    });
+    var r = { id: novoId_('S'), area: area, subarea: sub, foco: foco, nome: nome, ordem: n + 1 };
+    anexar_(sh_('Subfocos'), [[r.id, area, sub, foco, nome, r.ordem, agora_()]]);
+    return r;
+  });
+}
+
+function renomearSubfoco_(u, p) {
+  var nome = str_(p.nome).slice(0, 120);
+  if (!nome) throw erro_('Dê um nome ao subfoco.');
+  var r = renomearLinha_('Subfocos', str_(p.id), 5, nome, 'Subfoco não encontrado.');
+  r.nome = nome;
+  return r;
+}
+
+/** Apaga o subfoco; as aulas dele ficam sem subfoco (não são apagadas). */
+function excluirSubfoco_(u, p) {
+  var id = str_(p.id);
+  return comLock_(function () {
+    if (!linhaPorId_('Subfocos', id)) throw erro_('Subfoco não encontrado.');
+    var d = lerTudo_('Aulas');
+    for (var i = 0; i < d.length; i++) if (String(d[i][15]) === id) sh_('Aulas').getRange(i + 2, 16).setValue('');
+    apagarLinhas_('Subfocos', function (r) { return String(r[0]) === id; });
+    return { excluido: true };
+  });
+}
+
+/** p.itens = [{ id, subfocoId, ordem }]: define o subfoco e a posição de cada aula. */
+function ordenarAulas_(u, p) {
+  var itens = lista_(p.itens).slice(0, 500);
+  return comLock_(function () {
+    var d = lerTudo_('Aulas'), pos = {}, i;
+    for (i = 0; i < d.length; i++) pos[String(d[i][0])] = i;
+    var subs = {};
+    lerTudo_('Subfocos').forEach(function (r) { subs[String(r[0])] = r; });
+    itens.forEach(function (it) {
+      var k = pos[str_(it.id)];
+      if (k === undefined) return;
+      var sid = str_(it.subfocoId), r = d[k];
+      if (sid) {
+        var sf = subs[sid];
+        if (!sf || String(sf[1]) !== String(r[3]) || String(sf[2]) !== String(r[4]) || String(sf[3]) !== String(r[5])) throw erro_('Subfoco não pertence ao foco da aula.');
+      }
+      sh_('Aulas').getRange(k + 2, 16, 1, 2).setValues([[sid, Number(it.ordem) || 0]]);
+    });
+    return { ok: true };
   });
 }
 
@@ -2000,6 +2094,9 @@ function taxRenomearFoco_(u, p) {
     s.focos[i] = para;
     salvarTax_(t);
     var q = trocarFoco_('Questoes', 5, area, sub, de, para);
+    trocarFoco_('Aulas', 3, area, sub, de, para);
+    trocarFoco_('Caderno', 3, area, sub, de, para);
+    trocarFoco_('Subfocos', 1, area, sub, de, para);
     esquecerQuestoes_(q);
     return { taxonomia: tax_(), questoes: q.length };
   });
@@ -2009,6 +2106,7 @@ function taxRemoverFoco_(u, p) {
   exigirAdmin_(u);
   var area = str_(p.area), sub = str_(p.subarea), foco = str_(p.foco);
   var uso = taxonomiaUso_(u).uso[area + '|' + sub + '|' + foco];
+  if (!uso) lerTudo_('Aulas').forEach(function (r) { if (String(r[3]) === area && String(r[4]) === sub && String(r[5]) === foco) uso = (uso || 0) + 1; });
   if (uso) throw erro_('Esse foco está em uso (' + uso + ' questões). Renomeie ou recategorize antes de remover.');
   return comLock_(function () {
     var t = JSON.parse(JSON.stringify(tax_())), s = subareaTax_(t, area, sub), i = s.focos.indexOf(foco);
@@ -2168,7 +2266,7 @@ function uploadImagem_(u, p) {
   return { concluido: true, fileId: fileId };
 }
 `;var Uv={Respostas:0,Favoritas:0,Anotacoes:0,Trilhas:1,Sessoes:1,Reportes:0,Caderno:0},IA=35e4;function xA(r){let e="";for(let t=0;t<r.length;t+=32768)e+=String.fromCharCode.apply(null,r.subarray?r.subarray(t,t+32768):r.slice(t,t+32768));return btoa(e)}async function jv(r){let e=0,t=()=>Date.now().toString(36).padStart(9,"0")+(e++%46656).toString(36).padStart(3,"0")+Math.random().toString(36).slice(2,5),n=new Map,s=new Map,i=new Map;class a{constructor(E){this.nome=E,this.cab=[],this.mapa=new Map,this.ordem=[],this.rows=[this.cab]}reconstruir(){this.ordem=[...this.mapa.values()].sort((E,D)=>E.chave<D.chave?-1:1),this.rows=[this.cab,...this.ordem.map(E=>E.v)]}escolherBloco(E){let D=Uv[this.nome]!==void 0?String(E[Uv[this.nome]]):"",T=this.nome+(D?"__u"+D:""),b=s.get(T)||0;for(;(n.get(T+"__"+b)||0)>IA;)b++;return s.set(T,b),T+"__"+b}gravar(E){let D=JSON.stringify(E.v);n.set(E.bloco,(n.get(E.bloco)||0)+D.length),E.json=D,r.gravar(E.bloco,E.chave,D)}novaLinha(E){let D={chave:t(),v:E,bloco:this.escolherBloco(E),json:""};this.mapa.set(D.chave,D),this.ordem.push(D),this.rows.push(D.v),this.gravar(D)}}let o=new Map;class u{constructor(E,D,T,b,fe){Object.assign(this,{sh:E,r:D,c:T,nr:b,nc:fe})}getValues(){let E=[];for(let D=0;D<this.nr;D++){let T=this.sh.rows[this.r-1+D]||[],b=[];for(let fe=0;fe<this.nc;fe++){let Ne=T[this.c-1+fe];b.push(Ne??"")}E.push(b)}return E}getValue(){return this.getValues()[0][0]}setValues(E){let D=this.sh;return E.forEach((T,b)=>{let fe=this.r-1+b;if(fe===0){T.forEach((qe,xt)=>{D.cab[this.c-1+xt]=qe});return}let Ne=fe-1,et=D.ordem[Ne];if(et){T.forEach((qe,xt)=>{et.v[this.c-1+xt]=qe}),D.gravar(et);return}if(Ne!==D.ordem.length)throw new Error("Linha fora da sequ\xEAncia em "+D.nome);let Ie=[];T.forEach((qe,xt)=>{Ie[this.c-1+xt]=qe});for(let qe=0;qe<Ie.length;qe++)Ie[qe]===void 0&&(Ie[qe]="");D.novaLinha(Ie)}),this}setValue(E){return this.setValues([[E]])}setNumberFormat(){return this}setFontWeight(){return this}}let l=g=>o.get(g),B={getId:()=>"LOCAL",getSheets:()=>[...o.values()].map(p),getSheetByName:g=>o.has(g)?p(o.get(g)):null,insertSheet:g=>{let E=new a(g);return o.set(g,E),p(E)},deleteSheet:()=>{}},d=new Map;function p(g){if(d.has(g))return d.get(g);let E={getName:()=>g.nome,getLastRow:()=>g.cab.length||g.ordem.length?g.ordem.length+1:0,getLastColumn:()=>g.cab.length,getMaxRows:()=>1e9,insertRowsAfter(){},getRange:(D,T,b=1,fe=1)=>new u(g,D,T,b,fe),setFrozenRows(){},deleteRow(D){let T=g.ordem[D-2];T&&(g.mapa.delete(T.chave),g.ordem.splice(D-2,1),g.rows.splice(D-1,1),r.apagar(T.bloco,T.chave))}};return d.set(g,E),E}let m=new Map,v={get:g=>m.has(g)?m.get(g):null,put:(g,E)=>{m.set(g,E)},putAll:g=>Object.entries(g).forEach(([E,D])=>m.set(E,D)),getAll:g=>Object.fromEntries(g.filter(E=>m.has(E)).map(E=>[E,m.get(E)])),remove:g=>{m.delete(g)},removeAll:g=>g.forEach(E=>m.delete(E))},_={SPREADSHEET_ID:"LOCAL",TOKEN:"local"};class A{constructor(E){this.nome=E,this.pastas=[],this.arquivos=[],this.id="P"+crypto.randomUUID().slice(0,8)}getId(){return this.id}getFoldersByName(E){let D=this.pastas.filter(b=>b.nome===E),T=0;return{hasNext:()=>T<D.length,next:()=>D[T++]}}createFolder(E){let D=new A(E);return this.pastas.push(D),D}getFilesByName(E){let D=this.arquivos.filter(b=>b.nome===E&&!b.lixo),T=0;return{hasNext:()=>T<D.length,next:()=>D[T++]}}createFile(E,D,T){if(typeof E=="string"){let Ne={nome:E,texto:String(D),lixo:!1,getId(){return E},setTrashed(et){this.lixo=et},getBlob(){return{getDataAsString:()=>this.texto}},setSharing(){return this}};return this.arquivos.push(Ne),Ne}let b="img"+crypto.randomUUID().replace(/-/g,"").slice(0,14),fe="data:"+E.mime+";base64,"+xA(Uint8Array.from(E.bytes));return i.set(b,fe),r.gravarImagem(b,fe).catch(()=>{}),{getId:()=>b,setSharing(){return this}}}}let N=new A("root"),K=(g,E)=>g.id===E?g:g.pastas.map(D=>K(D,E)).find(Boolean),$={SpreadsheetApp:{getActiveSpreadsheet:()=>B,openById:()=>B},PropertiesService:{getScriptProperties:()=>({getProperty:g=>g in _?_[g]:null,setProperty:(g,E)=>{_[g]=E},setProperties:g=>Object.assign(_,g)})},CacheService:{getScriptCache:()=>v},LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},Utilities:{getUuid:()=>crypto.randomUUID(),base64Decode:g=>Array.from(Uint8Array.from(atob(g),E=>E.charCodeAt(0))),newBlob:(g,E,D)=>({bytes:g,mime:E,nome:D})},DriveApp:{getRootFolder:()=>N,getFolderById:g=>K(N,g),Access:{ANYONE_WITH_LINK:1},Permission:{VIEW:1}},ContentService:{MimeType:{JSON:"JSON"},createTextOutput:g=>({s:g,setMimeType(){return this}})},Logger:{log(){}}},z=Object.keys($),q=new Function(...z,Hv+`
-;return { ACOES: ACOES, ABAS: ABAS, invalidar: function () { _est = {}; invalidarCache_(); } };`)(...z.map(g=>$[g]));Object.keys(q.ABAS).forEach(g=>{let E=new a(g);E.cab.push(...q.ABAS[g].cols),o.set(g,E)});function Q(g){let E=!1,D=new Set;return g.forEach(T=>{let b=T.id.split("__")[0],fe=o.get(b);if(!fe)return;Object.entries(T.rows).forEach(([et,Ie])=>{if(typeof Ie!="string")return;let qe=fe.mapa.get(et);if(qe&&qe.json===Ie)return;let xt;try{xt=JSON.parse(Ie)}catch{return}qe?(qe.v=xt,qe.json=Ie):(fe.mapa.set(et,{chave:et,v:xt,bloco:T.id,json:Ie}),n.set(T.id,(n.get(T.id)||0)+Ie.length)),D.add(fe),E=!0});for(let[et,Ie]of[...fe.mapa])Ie.bloco===T.id&&!(et in T.rows)&&(fe.mapa.delete(et),D.add(fe),E=!0);let Ne=T.id.match(/^(.*)__(\d+)$/);Ne&&s.set(Ne[1],Math.max(s.get(Ne[1])||0,Number(Ne[2])))}),D.forEach(T=>T.reconstruir()),E}let w=await r.carregar(g=>{Q(g)&&(m.clear(),q.invalidar(),y.aoSincronizar&&y.aoSincronizar())});Q(w);let y={store:r,aoSincronizar:null,chamar(g,E,D){if(!/^(0[1-9]|1[0-9]|20)$/.test(String(E)))throw Object.assign(new Error("Usu\xE1rio inv\xE1lido (use 01 a 20)."),{codigo:"auth",definitivo:!0});let T=q.ACOES[g];if(!T)throw Object.assign(new Error("A\xE7\xE3o desconhecida: "+g),{codigo:"acao",definitivo:!0});try{return JSON.parse(JSON.stringify(T(String(E),D||{})??null))}catch(b){throw Object.assign(new Error(b.message||String(b)),{codigo:b.codigo||"erro",definitivo:!0})}},async imagem(g){if(i.has(g))return i.get(g);let E=await r.lerImagem(g);return E&&i.set(g,E),E}};return y}var qs=window.CONFIG||{},TA=new Set(["responder","criarTrilha","iniciarSessao","enviarCaderno","criarCurso","criarModulo","criarAula"]),Og=()=>!!qs.FIREBASE,uo=()=>Og()||!!(qs.API_URL&&qs.TOKEN),uc=null;function $v(){return uc||(uc=(async()=>{let r=qs.FIREBASE.memoria?qv(window.__HUB__||(window.__HUB__=Rg())):await Gv(qs.FIREBASE);r.onErro(t=>document.dispatchEvent(new CustomEvent("bq:erro-nuvem",{detail:t})));let e=await Promise.race([jv(r),new Promise((t,n)=>setTimeout(()=>n(new Error("tempo esgotado ao carregar o banco")),25e3))]);return e.aoSincronizar=()=>document.dispatchEvent(new CustomEvent("bq:sincronizou")),window.__imagem=t=>e.imagem(t),window.__gravarBlob=(d,p)=>r.gravarImagem(d,p),window.__apagarBlob=d=>r.apagarImagem(d),e})(),uc.catch(()=>{uc=null})),uc}async function ge(r,e={},{usuario:t}={}){if(!uo())throw Object.assign(new Error("Configure API_URL e TOKEN no topo do index.html (window.CONFIG)."),{codigo:"config"});if(Og()){let a;try{a=await $v()}catch(o){throw Object.assign(new Error("N\xE3o foi poss\xEDvel conectar ao Firebase: "+(o.message||o)+" (confira se o Firestore foi criado e as regras permitem leitura e escrita)."),{codigo:"rede"})}try{return a.chamar(r,t||Ee.usuario,e)}catch(o){throw o.codigo==="auth"&&r!=="login"&&document.dispatchEvent(new CustomEvent("bq:auth-expirou")),o}}let n=JSON.stringify({acao:r,usuario:t||Ee.usuario,token:qs.TOKEN,payload:e}),s=TA.has(r)?1:3,i;for(let a=0;a<s;a++)try{let o=await fetch(qs.API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:n,redirect:"follow"}),u;try{u=await o.json()}catch{throw Object.assign(new Error('Resposta inv\xE1lida do servidor. Confira a URL do Web App e se o acesso est\xE1 como "Qualquer pessoa".'),{definitivo:!0,codigo:"resposta"})}if(!u.ok)throw Object.assign(new Error(u.erro||"Erro no servidor"),{definitivo:!0,codigo:u.codigo});return u.dados}catch(o){if(i=o,o.definitivo)throw o.codigo==="auth"&&r!=="login"&&document.dispatchEvent(new CustomEvent("bq:auth-expirou")),o;a<s-1&&await GC(700*(a+1))}throw Object.assign(new Error("Falha de conex\xE3o com o servidor. Verifique sua internet e tente de novo."),{codigo:"rede",causa:i})}function Jv(){if(Og()){$v().catch(()=>{});return}uo()&&fetch(qs.API_URL,{method:"GET",redirect:"follow"}).catch(()=>{})}var Pg={};xn(Pg,{render:()=>AA});async function AA(r,{navegar:e}){let N=mfNomes();r.innerHTML=String(O`
+;return { ACOES: ACOES, ABAS: ABAS, invalidar: function () { _est = {}; invalidarCache_(); } };`)(...z.map(g=>$[g]));Object.keys(q.ABAS).forEach(g=>{let E=new a(g);E.cab.push(...q.ABAS[g].cols),o.set(g,E)});function Q(g){let E=!1,D=new Set;return g.forEach(T=>{let b=T.id.split("__")[0],fe=o.get(b);if(!fe)return;Object.entries(T.rows).forEach(([et,Ie])=>{if(typeof Ie!="string")return;let qe=fe.mapa.get(et);if(qe&&qe.json===Ie)return;let xt;try{xt=JSON.parse(Ie)}catch{return}qe?(qe.v=xt,qe.json=Ie):(fe.mapa.set(et,{chave:et,v:xt,bloco:T.id,json:Ie}),n.set(T.id,(n.get(T.id)||0)+Ie.length)),D.add(fe),E=!0});for(let[et,Ie]of[...fe.mapa])Ie.bloco===T.id&&!(et in T.rows)&&(fe.mapa.delete(et),D.add(fe),E=!0);let Ne=T.id.match(/^(.*)__(\d+)$/);Ne&&s.set(Ne[1],Math.max(s.get(Ne[1])||0,Number(Ne[2])))}),D.forEach(T=>T.reconstruir()),E}let w=await r.carregar(g=>{Q(g)&&(m.clear(),q.invalidar(),y.aoSincronizar&&y.aoSincronizar())});Q(w);let y={store:r,aoSincronizar:null,chamar(g,E,D){if(!/^(0[1-9]|1[0-9]|20)$/.test(String(E)))throw Object.assign(new Error("Usu\xE1rio inv\xE1lido (use 01 a 20)."),{codigo:"auth",definitivo:!0});let T=q.ACOES[g];if(!T)throw Object.assign(new Error("A\xE7\xE3o desconhecida: "+g),{codigo:"acao",definitivo:!0});try{return JSON.parse(JSON.stringify(T(String(E),D||{})??null))}catch(b){throw Object.assign(new Error(b.message||String(b)),{codigo:b.codigo||"erro",definitivo:!0})}},async imagem(g){if(i.has(g))return i.get(g);let E=await r.lerImagem(g);return E&&i.set(g,E),E}};return y}var qs=window.CONFIG||{},TA=new Set(["responder","criarTrilha","iniciarSessao","enviarCaderno","criarCurso","criarModulo","criarAula","criarSubfoco"]),Og=()=>!!qs.FIREBASE,uo=()=>Og()||!!(qs.API_URL&&qs.TOKEN),uc=null;function $v(){return uc||(uc=(async()=>{let r=qs.FIREBASE.memoria?qv(window.__HUB__||(window.__HUB__=Rg())):await Gv(qs.FIREBASE);r.onErro(t=>document.dispatchEvent(new CustomEvent("bq:erro-nuvem",{detail:t})));let e=await Promise.race([jv(r),new Promise((t,n)=>setTimeout(()=>n(new Error("tempo esgotado ao carregar o banco")),25e3))]);return e.aoSincronizar=()=>document.dispatchEvent(new CustomEvent("bq:sincronizou")),window.__imagem=t=>e.imagem(t),window.__gravarBlob=(d,p)=>r.gravarImagem(d,p),window.__apagarBlob=d=>r.apagarImagem(d),e})(),uc.catch(()=>{uc=null})),uc}async function ge(r,e={},{usuario:t}={}){if(!uo())throw Object.assign(new Error("Configure API_URL e TOKEN no topo do index.html (window.CONFIG)."),{codigo:"config"});if(Og()){let a;try{a=await $v()}catch(o){throw Object.assign(new Error("N\xE3o foi poss\xEDvel conectar ao Firebase: "+(o.message||o)+" (confira se o Firestore foi criado e as regras permitem leitura e escrita)."),{codigo:"rede"})}try{return a.chamar(r,t||Ee.usuario,e)}catch(o){throw o.codigo==="auth"&&r!=="login"&&document.dispatchEvent(new CustomEvent("bq:auth-expirou")),o}}let n=JSON.stringify({acao:r,usuario:t||Ee.usuario,token:qs.TOKEN,payload:e}),s=TA.has(r)?1:3,i;for(let a=0;a<s;a++)try{let o=await fetch(qs.API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:n,redirect:"follow"}),u;try{u=await o.json()}catch{throw Object.assign(new Error('Resposta inv\xE1lida do servidor. Confira a URL do Web App e se o acesso est\xE1 como "Qualquer pessoa".'),{definitivo:!0,codigo:"resposta"})}if(!u.ok)throw Object.assign(new Error(u.erro||"Erro no servidor"),{definitivo:!0,codigo:u.codigo});return u.dados}catch(o){if(i=o,o.definitivo)throw o.codigo==="auth"&&r!=="login"&&document.dispatchEvent(new CustomEvent("bq:auth-expirou")),o;a<s-1&&await GC(700*(a+1))}throw Object.assign(new Error("Falha de conex\xE3o com o servidor. Verifique sua internet e tente de novo."),{codigo:"rede",causa:i})}function Jv(){if(Og()){$v().catch(()=>{});return}uo()&&fetch(qs.API_URL,{method:"GET",redirect:"follow"}).catch(()=>{})}var Pg={};xn(Pg,{render:()=>AA});async function AA(r,{navegar:e}){let N=mfNomes();r.innerHTML=String(O`
   <div class="mx-auto mt-8 max-w-2xl sm:mt-14">
     <h1 class="h1">Entrar</h1>
     <p class="muted mt-1 text-sm">Escolha seu usu\xE1rio.</p>
@@ -2811,59 +2909,80 @@ async function mfEnviarCaderno(q) {
     onSubmit: async v => { await ge("enviarCaderno", { questaoId: q.id, texto: v.texto || "" }); be("Enviado ao caderno.", "ok", 2500); } });
 }
 
+/** Estado aberto/fechado das seções recolhíveis (persiste entre redesenhos). */
+var mfEstado = new Map();
+function mfAberto(k, padrao = true) { return (mfEstado.has(k) ? mfEstado.get(k) : padrao) ? ot("open") : ""; }
+function mfLigarSecoes(r) {
+  r.addEventListener("toggle", ev => { const d = ev.target; d && d.matches && d.matches("details[data-k]") && mfEstado.set(d.dataset.k, d.open); }, true);
+}
+function mfAbrirTodos(r, abrir) { r.querySelectorAll("details[data-k]").forEach(d => { d.open = abrir; mfEstado.set(d.dataset.k, abrir); }); }
+function mfBotoesSecoes() {
+  return O`<span class="inline-flex gap-1"><button type="button" class="btn btn-ghost btn-sm" data-abrir-todos="1">Expandir tudo</button><button type="button" class="btn btn-ghost btn-sm" data-abrir-todos="0">Recolher tudo</button></span>`;
+}
+/** Botão que abre as questões já filtradas pelo foco. */
+function mfBotaoTreinar(area, sub, foco) {
+  return O`<a href="#/questoes?area=${encodeURIComponent(area)}&subarea=${encodeURIComponent(sub)}&foco=${encodeURIComponent(foco)}" class="btn btn-primary"><i data-lucide="list-checks" class="h-4 w-4" aria-hidden="true"></i>Treinar questões desse Foco</a>`;
+}
+
 var mfVCaderno = { render: async function (r, { query: qy }) {
   await mfAtualizarTax();
   let notas = [];
   const chave = n => `${n.area}|${n.subarea}|${n.foco}`;
-  const ordemArea = a => { let i = Yr.indexOf(a); return i < 0 ? 99 : i; };
-  const pt = (a, b) => String(a).localeCompare(String(b), "pt-BR");
-  const aguardar = () => r.innerHTML = String(Wi(3));
   function arvore() {
-    let focos = {};
-    notas.forEach(n => { let k = chave(n); focos[k] = focos[k] || { area: n.area, subarea: n.subarea, foco: n.foco, n: 0 }; focos[k].n++; });
-    let areas = {};
-    Object.values(focos).forEach(f => (areas[f.area] = areas[f.area] || []).push(f));
-    let ordem = Object.keys(areas).sort((a, b) => ordemArea(a) - ordemArea(b) || pt(a, b));
-    return O`<h1 class="h1">Focos</h1>
-      <p class="muted mt-1 text-sm">${Gt(notas.length, "anotação", "anotações")}</p>
-      ${ordem.length ? O`<div class="mt-5 space-y-4">${ordem.map(a => O`<section class="card"><h2 class="mb-3 flex items-center justify-between gap-2">${Vt(a)}<span class="muted text-xs">${Gt(areas[a].reduce((s, f) => s + f.n, 0), "anotação", "anotações")}</span></h2>
-        <ul class="divide-y divide-slate-100 dark:divide-slate-800">${areas[a].sort((x, y) => pt(x.subarea, y.subarea) || pt(x.foco, y.foco)).map(f => O`<li><a href="#/caderno?foco=${encodeURIComponent(chave(f))}" class="flex items-center justify-between gap-3 py-2.5 text-sm hover:underline"><span class="min-w-0 truncate">${f.subarea} <span class="muted">›</span> ${f.foco}</span><span class="shrink-0 tabular-nums font-semibold">${f.n}</span></a></li>`)}</ul></section>`)}</div>`
-        : $n("bookmark", "Nenhuma anotação ainda", "Erre uma questão e toque em “Enviar ao caderno”.")}`;
+    const cont = {}, porArea = {};
+    notas.forEach(n => { cont[chave(n)] = (cont[chave(n)] || 0) + 1; porArea[n.area] = (porArea[n.area] || 0) + 1; });
+    const areas = (Ee.taxonomia || { areas: [] }).areas;
+    return O`<div class="flex flex-wrap items-end justify-between gap-3"><div><h1 class="h1">Focos</h1><p class="muted mt-1 text-sm">${Gt(notas.length, "anotação", "anotações")}</p></div>${mfBotoesSecoes()}</div>
+      <div class="mt-4"><label class="label" for="cad-busca">Buscar foco</label><input id="cad-busca" class="input" type="search" placeholder="Ex.: Asma" autocomplete="off"></div>
+      <div class="mt-5 space-y-3">${areas.map(a => O`<details class="card p-0" data-k="ca|${a.nome}" ${mfAberto("ca|" + a.nome, true)}>
+        <summary class="flex cursor-pointer items-center justify-between gap-2 p-4">${Vt(a.nome)}<span class="muted text-xs">${Gt(porArea[a.nome] || 0, "anotação", "anotações")}</span></summary>
+        <div class="space-y-1 px-4 pb-4">${a.subareas.map(s => O`<details data-k="cs|${a.nome}|${s.nome}" data-sub="${s.nome.toLowerCase()}" ${mfAberto("cs|" + a.nome + "|" + s.nome, false)}>
+          <summary class="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800"><span class="min-w-0 truncate">${s.nome}</span><span class="muted shrink-0 text-xs font-normal">${Gt(s.focos.length, "foco", "focos")}</span></summary>
+          <ul class="ml-3 border-l border-slate-200 pl-3 dark:border-slate-700">${s.focos.map(f => { const n = cont[`${a.nome}|${s.nome}|${f}`] || 0; return O`<li data-t="${(s.nome + " " + f).toLowerCase()}"><a href="#/caderno?foco=${encodeURIComponent(a.nome + "|" + s.nome + "|" + f)}" class="flex items-center justify-between gap-3 py-2 text-sm hover:underline"><span class="min-w-0">${f}</span><span class="shrink-0 tabular-nums ${n ? "font-semibold" : "muted"}">${n}</span></a></li>`; })}</ul></details>`)}</div></details>`)}</div>`;
   }
   function detalhe(foco) {
-    let [area, subarea, nomeFoco] = foco.split("|"), lista = notas.filter(n => chave(n) === foco);
-    return O`<div class="flex flex-wrap items-center gap-3"><a href="#/caderno" class="btn btn-ghost btn-sm -ml-2"><i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>Focos</a></div>
+    const [area, subarea, nomeFoco] = foco.split("|"), lista = notas.filter(n => chave(n) === foco).slice().reverse();
+    return O`<div><a href="#/caderno" class="btn btn-ghost btn-sm -ml-2"><i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>Focos</a></div>
       <div class="mt-3">${mfCaminho({ area, subarea, foco: nomeFoco })}</div>
-      <p class="muted mt-2 text-sm">${Gt(lista.length, "anotação", "anotações")}</p>
-      ${lista.length ? O`<ul class="mt-4 space-y-3">${lista.map(n => O`<li class="card p-4">
-          <div class="flex flex-wrap items-start justify-between gap-2">
-            ${n.questao ? O`<a href="#/q/${encodeURIComponent(n.questaoId)}" class="text-sm font-semibold hover:underline">${n.questao.instituicao} ${n.questao.ano}${n.questao.selecaoRotulo ? " · " + n.questao.selecaoRotulo : ""} · Questão ${n.questao.numero}</a>` : O`<span class="muted text-sm">Questão removida do banco</span>`}
-            <span class="muted text-xs">${Xr(n.criadoEm)}</span>
-          </div>
-          ${n.questao ? O`<p class="muted mt-2 text-sm">${n.questao.enunciado.slice(0, 240)}${n.questao.enunciado.length > 240 ? "…" : ""}</p>` : ""}
-          ${n.texto ? O`<div class="texto-questao mt-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">${n.texto}</div>` : ""}
-          <div class="mt-3 flex justify-end gap-1">
-            <button type="button" class="btn btn-ghost btn-sm px-2" data-cad-editar="${n.id}" aria-label="Editar comentário" title="Editar comentário"><i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i></button>
-            <button type="button" class="btn btn-ghost btn-sm px-2" data-cad-excluir="${n.id}" aria-label="Excluir do caderno" title="Excluir do caderno"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
-          </div></li>`)}</ul>` : $n("bookmark", "Nada neste foco", "")}`;
+      <article class="mt-6 max-w-3xl space-y-7 text-[15px] leading-relaxed">${lista.length ? lista.map(n => O`<div>
+          ${n.texto ? O`<div class="whitespace-pre-wrap">${n.texto}</div>` : O`<div class="muted italic">Sem comentário</div>`}
+          <p class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            ${n.questao ? O`<a href="#/q/${encodeURIComponent(n.questaoId)}" class="font-semibold text-brand underline dark:text-slate-100">(Abrir questão)</a>` : O`<span class="muted">(Questão removida do banco)</span>`}
+            <button type="button" class="muted hover:underline" data-cad-editar="${n.id}">editar</button>
+            <button type="button" class="muted hover:underline" data-cad-excluir="${n.id}">excluir</button>
+          </p></div>`) : O`<p class="muted">Nenhuma anotação neste foco ainda.</p>`}</article>
+      <div class="mt-8">${mfBotaoTreinar(area, subarea, nomeFoco)}</div>`;
+  }
+  function filtrar(b) {
+    b = b.trim().toLowerCase();
+    r.querySelectorAll("li[data-t]").forEach(li => { li.hidden = !!b && !li.dataset.t.includes(b); });
+    r.querySelectorAll("details[data-sub]").forEach(d => {
+      const tem = !b || [...d.querySelectorAll("li[data-t]")].some(li => !li.hidden);
+      d.hidden = !tem;
+      if (b) d.open = tem; else d.open = mfEstado.has(d.dataset.k) ? mfEstado.get(d.dataset.k) : false;
+    });
+    r.querySelectorAll("details[data-k^='ca|']").forEach(d => { d.hidden = !!b && ![...d.querySelectorAll("details[data-sub]")].some(x => !x.hidden); if (b && !d.hidden) d.open = true; });
   }
   function desenhar() {
     r.innerHTML = String(qy.foco ? detalhe(qy.foco) : arvore());
     jn(r);
   }
+  mfLigarSecoes(r);
+  r.addEventListener("input", ev => { ev.target.id === "cad-busca" && filtrar(ev.target.value); });
   r.addEventListener("click", async ev => {
     let b;
+    if ((b = ev.target.closest("[data-abrir-todos]"))) return mfAbrirTodos(r, b.dataset.abrirTodos === "1");
     if ((b = ev.target.closest("[data-cad-editar]"))) {
       let n = notas.find(x => x.id === b.dataset.cadEditar);
-      return n && pn({ titulo: "Editar comentário", confirmar: "Salvar", corpo: O`<label class="label" for="cad-ed">Comentário</label><textarea id="cad-ed" name="texto" class="input" rows="6" maxlength="5000">${n.texto}</textarea>`,
-        onSubmit: async v => { await ge("editarCaderno", { id: n.id, texto: v.texto || "" }); be("Comentário salvo.", "ok", 2000); notas = (await ge("listarCaderno")).notas; desenhar(); } });
+      return n && pn({ titulo: "Editar anotação", confirmar: "Salvar", corpo: O`<label class="label" for="cad-ed">Comentário</label><textarea id="cad-ed" name="texto" class="input" rows="8" maxlength="5000">${n.texto}</textarea>`,
+        onSubmit: async v => { await ge("editarCaderno", { id: n.id, texto: v.texto || "" }); be("Anotação salva.", "ok", 2000); notas = (await ge("listarCaderno")).notas; desenhar(); } });
     }
     if ((b = ev.target.closest("[data-cad-excluir]"))) {
       if (!await Ac("Excluir esta anotação do caderno? A questão continua no banco.", { confirmar: "Excluir", perigo: !0, titulo: "Excluir do caderno" })) return;
       try { await ge("excluirCaderno", { id: b.dataset.cadExcluir }); notas = (await ge("listarCaderno")).notas; desenhar(); be("Anotação excluída.", "ok", 2000); } catch (x) { be(x.message, "erro"); }
     }
   });
-  aguardar();
+  r.innerHTML = String(Wi(3));
   notas = (await ge("listarCaderno")).notas;
   desenhar();
 } };
@@ -2930,36 +3049,70 @@ function mfEmbed(u) {
   return { k: "doc", src: u };
 }
 
-/** Abre a aula: vídeo, áudio e PDF tocam/mostram no próprio app; links abrem em nova aba (YouTube embutido). */
-async function mfAbrirAula(a) {
-  let url = null;
-  try { if (a.arquivo) url = await mfUrlArquivo(a.arquivo); }
-  catch (x) { return be(x.message, "erro", 6000); }
-  const emb = !url && a.url ? mfEmbed(a.url) : null;
-  let corpo;
-  if (a.tipo === "video" && url) corpo = O`<video controls playsinline class="aspect-video w-full rounded-xl bg-black object-contain" src="${url}"></video>`;
-  else if (a.tipo === "audio" && url) corpo = O`<audio controls class="w-full" src="${url}"></audio>`;
-  else if (a.tipo === "pdf" && url) corpo = O`<iframe title="${a.titulo}" src="${url}" class="h-[70vh] w-full rounded-xl border border-slate-200"></iframe>`;
-  else if (emb && emb.k === "video") corpo = O`<video controls playsinline class="aspect-video w-full rounded-xl bg-black object-contain" src="${emb.src}"></video>`;
-  else if (emb && emb.k === "audio") corpo = O`<audio controls class="w-full" src="${emb.src}"></audio>`;
-  else if (emb) corpo = O`<iframe title="${a.titulo}" src="${emb.src}" class="${emb.k === "doc" && a.tipo !== "video" ? "h-[70vh]" : "aspect-video"} w-full rounded-xl border border-slate-200" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
-  else corpo = O`<p class="text-sm">Conteúdo disponível no link.</p>`;
-  const botoes = O`<div class="flex flex-wrap gap-2">${url ? O`<a class="btn btn-outline btn-sm" href="${url}" download="${a.arquivo.nome}"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Baixar</a>` : ""}${a.url ? O`<a class="btn btn-outline btn-sm" href="${a.url}" target="_blank" rel="noopener"><i data-lucide="external-link" class="h-4 w-4" aria-hidden="true"></i>Abrir link</a>` : ""}</div>`;
-  await pn({ titulo: a.titulo, largo: a.tipo === "video" ? "xl" : !0, confirmar: "Fechar", cancelar: null, corpo: O`<div class="space-y-3">${mfCaminho(a)}${corpo}${botoes}</div>` });
-  url && URL.revokeObjectURL(url);
+/** Etiquetas da aula: Aula Flash e Parte x/y. */
+function mfEtiquetasAula(a) {
+  const cls = "rounded-full px-2 py-0.5 text-[11px] font-semibold";
+  return O`${a.flash ? O`<span class="${cls} bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Aula Flash</span>` : ""}${a.parte ? O`<span class="${cls} bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">Parte ${a.parte}${a.totalPartes ? "/" + a.totalPartes : ""}</span>` : ""}`;
+}
+
+/** Abre a aula num player com setas para a anterior/próxima (seq = aulas do foco, na ordem). */
+async function mfAbrirAula(a, seq = [a]) {
+  let i = Math.max(0, seq.findIndex(x => x.id === a.id)), blob = null, fim = !1;
+  const p = pn({ titulo: a.titulo, largo: "xl", confirmar: "Fechar", cancelar: null, corpo: O`<div data-aula-box class="space-y-3"></div>` });
+  const dlg = document.querySelector("dialog[open]"), box = dlg.querySelector("[data-aula-box]"), tit = dlg.querySelector("#modal-titulo");
+  async function mostrar(k) {
+    i = k; const x = seq[i];
+    blob && URL.revokeObjectURL(blob); blob = null;
+    tit && (tit.textContent = x.titulo);
+    try { if (x.arquivo) blob = await mfUrlArquivo(x.arquivo); } catch (err) { be(err.message, "erro", 6000); }
+    if (fim) return;
+    const emb = !blob && x.url ? mfEmbed(x.url) : null;
+    let corpo;
+    if (x.tipo === "video" && blob) corpo = O`<video controls playsinline class="aspect-video w-full rounded-xl bg-black object-contain" src="${blob}"></video>`;
+    else if (x.tipo === "audio" && blob) corpo = O`<audio controls class="w-full" src="${blob}"></audio>`;
+    else if (x.tipo === "pdf" && blob) corpo = O`<iframe title="${x.titulo}" src="${blob}" class="h-[70vh] w-full rounded-xl border border-slate-200"></iframe>`;
+    else if (emb && emb.k === "video") corpo = O`<video controls playsinline class="aspect-video w-full rounded-xl bg-black object-contain" src="${emb.src}"></video>`;
+    else if (emb && emb.k === "audio") corpo = O`<audio controls class="w-full" src="${emb.src}"></audio>`;
+    else if (emb) corpo = O`<iframe title="${x.titulo}" src="${emb.src}" class="${emb.k === "doc" && x.tipo !== "video" ? "h-[70vh]" : "aspect-video"} w-full rounded-xl border border-slate-200" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+    else corpo = O`<p class="text-sm">Conteúdo disponível no link.</p>`;
+    const nav = seq.length > 1 ? O`<div class="flex items-center justify-between gap-2">
+      <button type="button" class="btn btn-outline btn-sm" data-aula-ant ${i === 0 ? ot("disabled") : ""} aria-label="Aula anterior"><i data-lucide="chevron-left" class="h-4 w-4" aria-hidden="true"></i>Anterior</button>
+      <span class="muted text-xs">Aula ${i + 1} de ${seq.length}</span>
+      <button type="button" class="btn btn-outline btn-sm" data-aula-prox ${i === seq.length - 1 ? ot("disabled") : ""} aria-label="Próxima aula">Próxima<i data-lucide="chevron-right" class="h-4 w-4" aria-hidden="true"></i></button></div>` : "";
+    box.innerHTML = String(O`${nav}<div class="flex flex-wrap items-center gap-2">${mfCaminho(x)}${mfEtiquetasAula(x)}</div>${corpo}<div class="flex flex-wrap gap-2">${blob ? O`<a class="btn btn-outline btn-sm" href="${blob}" download="${x.arquivo.nome}"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Baixar</a>` : ""}${x.url ? O`<a class="btn btn-outline btn-sm" href="${x.url}" target="_blank" rel="noopener"><i data-lucide="external-link" class="h-4 w-4" aria-hidden="true"></i>Abrir link</a>` : ""}</div>`);
+    jn(box);
+  }
+  dlg.addEventListener("click", ev => {
+    if (ev.target.closest("[data-aula-ant]") && i > 0) mostrar(i - 1);
+    else if (ev.target.closest("[data-aula-prox]") && i < seq.length - 1) mostrar(i + 1);
+  });
+  const tecla = ev => {
+    if (/^(VIDEO|AUDIO|INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
+    if (ev.key === "ArrowLeft" && i > 0) mostrar(i - 1);
+    else if (ev.key === "ArrowRight" && i < seq.length - 1) mostrar(i + 1);
+  };
+  document.addEventListener("keydown", tecla);
+  mostrar(i);
+  await p; fim = !0;
+  document.removeEventListener("keydown", tecla);
+  blob && URL.revokeObjectURL(blob);
 }
 
 /** Formulário de nova aula (curso e módulo já definidos) ou de edição. */
-async function mfFormAula({ cursoId, moduloId, aula, aoSalvar }) {
+async function mfFormAula({ cursoId, moduloId, aula, aoSalvar, subfocos = [] }) {
   const a = aula || {}, tipoIni = a.tipo || "video";
   const corpo = O`<div class="space-y-3">
     <div><label class="label" for="au-tit">Título da aula</label><input id="au-tit" name="titulo" class="input" maxlength="160" required value="${a.titulo || ""}"></div>
     ${mfCamposTax(a)}
+    <div><label class="label" for="au-sub">Subfoco <span class="muted font-normal">(opcional)</span></label><select id="au-sub" name="subfocoId" class="input"></select></div>
     <div class="grid gap-3 sm:grid-cols-2"><div><label class="label" for="au-tipo">Tipo</label><select id="au-tipo" name="tipo" class="input">${["video", "pdf", "audio", "link"].map(v => O`<option value="${v}" ${v === tipoIni ? ot("selected") : ""}>${MF_ROTULO_TIPO[v]}</option>`)}</select></div>
-    <div><label class="label" for="au-url">Link <span class="muted font-normal">(YouTube, Drive…)</span></label><input id="au-url" name="url" class="input" type="url" placeholder="https://" value="${a.url || ""}"></div></div>
+    <div class="flex items-end gap-2 pb-2"><input id="au-flash" name="flash" type="checkbox" value="1" class="h-4 w-4" ${a.flash ? ot("checked") : ""}><label for="au-flash" class="text-sm">Aula Flash <span class="muted">(resumo rápido do assunto)</span></label></div></div>
+    <div class="grid grid-cols-2 gap-3"><div><label class="label" for="au-parte">Parte nº <span class="muted font-normal">(se a aula tem várias partes)</span></label><input id="au-parte" name="parte" type="number" min="1" max="99" class="input" value="${a.parte || ""}"></div>
+    <div><label class="label" for="au-total">Total de partes</label><input id="au-total" name="totalPartes" type="number" min="1" max="99" class="input" value="${a.totalPartes || ""}"></div></div>
+    <div><label class="label" for="au-url">Link <span class="muted font-normal">(YouTube, Drive…)</span></label><input id="au-url" name="url" class="input" type="url" placeholder="https://" value="${a.url || ""}"></div>
     <div><label class="label" for="au-arq">Arquivo <span class="muted font-normal">(até 30 MB)</span></label><input id="au-arq" name="arquivo" type="file" class="input py-1.5" accept="video/*,audio/*,application/pdf">${a.arquivo ? O`<p class="muted mt-1 text-xs">Arquivo atual: ${a.arquivo.nome}. Escolha outro para trocar.</p>` : ""}</div>
   </div>`;
-  await mfModalTax({ titulo: aula ? "Editar aula" : "Nova aula", largo: !0, confirmar: "Salvar", corpo,
+  const prom = mfModalTax({ titulo: aula ? "Editar aula" : "Nova aula", largo: !0, confirmar: "Salvar", corpo,
     onSubmit: async v => {
       v = await mfResolverFoco(v);
       const tem = v.arquivo && v.arquivo.size > 0;
@@ -2972,7 +3125,7 @@ async function mfFormAula({ cursoId, moduloId, aula, aoSalvar }) {
         be("Enviando arquivo…", "info", 60000);
         arq = await mfEnviarArquivo(v.arquivo);
       }
-      const campos = { titulo: v.titulo, tipo: v.tipo, url: (v.url || "").trim(), area: v.area, subarea: v.subarea, foco: v.foco };
+      const campos = { titulo: v.titulo, tipo: v.tipo, url: (v.url || "").trim(), area: v.area, subarea: v.subarea, foco: v.foco, subfocoId: v.subfocoId || "", flash: !!v.flash, parte: v.parte || "", totalPartes: v.totalPartes || "" };
       try {
         if (aula) {
           const r = await ge("editarAula", { id: aula.id, ...campos, arquivo: arq, manterArquivo: !arq && !!aula.arquivo, removerArquivo: false });
@@ -2984,12 +3137,23 @@ async function mfFormAula({ cursoId, moduloId, aula, aoSalvar }) {
       be("Aula salva.", "ok", 2000);
       aoSalvar && await aoSalvar();
     } }, a);
+  const dlg = document.querySelector("dialog[open]"), sel = dlg && dlg.querySelector("#au-sub");
+  if (sel) {
+    const atualiza = () => {
+      const ar = dlg.querySelector('[data-tax="area"]').value, su = dlg.querySelector('[data-tax="sub"]').value, fo = dlg.querySelector('[data-tax="foco"]').value;
+      const lista = subfocos.filter(s => s.area === ar && s.subarea === su && s.foco === fo).sort((x, y) => x.ordem - y.ordem);
+      const manter = sel.value || a.subfocoId || "";
+      sel.innerHTML = String(O`<option value="">Sem subfoco</option>${lista.map(s => O`<option value="${s.id}" ${s.id === manter ? ot("selected") : ""}>${s.nome}</option>`)}`);
+    };
+    atualiza(); dlg.addEventListener("change", atualiza);
+  }
+  return prom;
 }
 
-var mfVAulas = { render: async function (r, { query: qy, navegar: e }) {
+var mfVAulas = { render: async function (r, { query: qy }) {
   await mfAtualizarTax();
-  let d = { cursos: [], modulos: [], aulas: [] };
-  const visao = qy.visao === "curso" ? "curso" : "foco";
+  let d = { cursos: [], modulos: [], aulas: [], subfocos: [] };
+  const visao = qy.visao === "curso" ? "curso" : "foco", agrupar = qy.agrupar === "curso" ? "curso" : "subfoco";
   const pt = (a, b) => String(a).localeCompare(String(b), "pt-BR");
   const criado = (a, b) => (a.criadoEm < b.criadoEm ? -1 : a.criadoEm > b.criadoEm ? 1 : 0);
   const ordemFoco = a => {
@@ -2998,67 +3162,79 @@ var mfVAulas = { render: async function (r, { query: qy, navegar: e }) {
   };
   const cmpFoco = (a, b) => { let x = ordemFoco(a), y = ordemFoco(b); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2] || pt(a.foco, b.foco); };
   const chaveFoco = a => `${a.area}|${a.subarea}|${a.foco}`;
-  const cursoPorId = id => d.cursos.find(c => c.id === id);
+  const cursoPorId = id => d.cursos.find(c => c.id === id), moduloPorId = id => d.modulos.find(m => m.id === id);
   const modulosDo = cid => d.modulos.filter(m => m.cursoId === cid).sort(criado);
-  const aulasDo = mid => d.aulas.filter(a => a.moduloId === mid).sort(criado);
-  const linhaAula = a => O`<li class="flex flex-wrap items-center gap-2 py-2 text-sm">
+  const subfocosDo = k => d.subfocos.filter(s => chaveFoco(s) === k).sort((a, b) => a.ordem - b.ordem);
+  const porOrdem = (a, b) => a.ordem - b.ordem || criado(a, b);
+  /** Aulas de um foco na ordem de exibição: por subfoco (os sem subfoco por último) e depois pela posição. */
+  function sequencia(k) {
+    const subs = subfocosDo(k), pos = id => { const i = subs.findIndex(s => s.id === id); return i < 0 ? 9999 : i; };
+    return d.aulas.filter(a => chaveFoco(a) === k).sort((a, b) => pos(a.subfocoId) - pos(b.subfocoId) || porOrdem(a, b));
+  }
+  const grupo = (k, sid) => sequencia(k).filter(a => (a.subfocoId || "") === (sid || ""));
+  const btn = (attr, icone, rot, extra = "") => O`<button type="button" class="btn btn-ghost btn-sm px-2" ${ot(attr)} aria-label="${rot}" title="${rot}" ${extra ? ot(extra) : ""}><i data-lucide="${icone}" class="h-4 w-4" aria-hidden="true"></i></button>`;
+  const linhaAula = (a, { setas = null, contexto = false } = {}) => O`<li class="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 text-sm">
     <span class="muted inline-flex w-14 shrink-0 items-center gap-1.5 text-xs"><i data-lucide="${MF_ICONE_TIPO[a.tipo]}" class="h-4 w-4" aria-hidden="true"></i>${MF_ROTULO_TIPO[a.tipo]}</span>
     <button type="button" class="min-w-0 flex-1 truncate text-left font-medium hover:underline" data-abrir-aula="${a.id}">${a.titulo}</button>
-    <span class="flex shrink-0 gap-1">
-      <button type="button" class="btn btn-ghost btn-sm px-2" data-editar-aula="${a.id}" aria-label="Editar aula ${a.titulo}" title="Editar"><i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i></button>
-      <button type="button" class="btn btn-ghost btn-sm px-2" data-excluir-aula="${a.id}" aria-label="Excluir aula ${a.titulo}" title="Excluir"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
+    ${mfEtiquetasAula(a)}${contexto ? O`<span class="muted text-xs">${(cursoPorId(a.cursoId) || {}).nome} · ${(moduloPorId(a.moduloId) || {}).nome}</span>` : ""}
+    <span class="flex shrink-0 gap-0.5">
+      ${setas ? O`${btn(`data-mover="${a.id}|-1"`, "chevron-up", "Subir", setas.primeiro ? "disabled" : "")}${btn(`data-mover="${a.id}|1"`, "chevron-down", "Descer", setas.ultimo ? "disabled" : "")}` : ""}
+      ${btn(`data-editar-aula="${a.id}"`, "pencil", "Editar")}${btn(`data-excluir-aula="${a.id}"`, "trash-2", "Excluir")}
     </span></li>`;
-  const aulasPorFoco = aulas => {
-    let grupos = {};
-    aulas.forEach(a => (grupos[chaveFoco(a)] = grupos[chaveFoco(a)] || { foco: a, aulas: [] }).aulas.push(a));
-    return Object.values(grupos).sort((x, y) => cmpFoco(x.foco, y.foco));
-  };
+  const resumo = (k, titulo, extra = "") => O`<summary class="flex cursor-pointer flex-wrap items-center justify-between gap-2 py-1">${titulo}${extra}</summary>`;
   function vCurso() {
     return d.cursos.slice().sort(criado).map(c => {
       const mods = modulosDo(c.id), n = d.aulas.filter(a => a.cursoId === c.id).length;
-      return O`<section class="card" data-curso="${c.id}">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h2 class="min-w-0 truncate text-base font-semibold">${c.nome} <span class="muted text-xs font-normal">${Gt(n, "aula", "aulas")}</span></h2>
-          <span class="flex gap-1">
-            <button type="button" class="btn btn-ghost btn-sm px-2" data-curso-renomear="${c.id}" aria-label="Renomear curso" title="Renomear"><i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i></button>
-            <button type="button" class="btn btn-ghost btn-sm px-2" data-curso-excluir="${c.id}" aria-label="Excluir curso" title="Excluir"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
-          </span></div>
-        <div class="mt-3 space-y-3">${mods.map(m => O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700" data-modulo="${m.id}">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <h3 class="text-sm font-semibold">${m.nome}</h3>
-              <span class="flex gap-1">
-                <button type="button" class="btn btn-outline btn-sm" data-nova-aula="${c.id}|${m.id}"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Aula</button>
-                <button type="button" class="btn btn-ghost btn-sm px-2" data-modulo-renomear="${m.id}" aria-label="Renomear módulo" title="Renomear"><i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i></button>
-                <button type="button" class="btn btn-ghost btn-sm px-2" data-modulo-excluir="${m.id}" aria-label="Excluir módulo" title="Excluir"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
-              </span></div>
-            ${aulasPorFoco(aulasDo(m.id)).map(g => O`<div class="mt-2"><div class="mb-1">${mfCaminho(g.foco)}</div><ul class="divide-y divide-slate-100 dark:divide-slate-800">${g.aulas.map(linhaAula)}</ul></div>`)}
-          </div>`)}
+      return O`<details class="card" data-k="c|${c.id}" ${mfAberto("c|" + c.id)}>
+        ${resumo("", O`<h2 class="min-w-0 truncate text-base font-semibold">${c.nome} <span class="muted text-xs font-normal">${Gt(n, "aula", "aulas")}</span></h2>`, O`<span class="flex gap-1">${btn(`data-curso-renomear="${c.id}"`, "pencil", "Renomear curso")}${btn(`data-curso-excluir="${c.id}"`, "trash-2", "Excluir curso")}</span>`)}
+        <div class="mt-3 space-y-3">${mods.map(m => {
+          const gs = {}; d.aulas.filter(a => a.moduloId === m.id).sort(porOrdem).forEach(a => (gs[chaveFoco(a)] = gs[chaveFoco(a)] || { foco: a, aulas: [] }).aulas.push(a));
+          const gl = Object.values(gs).sort((x, y) => cmpFoco(x.foco, y.foco));
+          return O`<details class="rounded-xl border border-slate-200 p-3 dark:border-slate-700" data-k="m|${m.id}" ${mfAberto("m|" + m.id)}>
+            ${resumo("", O`<h3 class="text-sm font-semibold">${m.nome} <span class="muted text-xs font-normal">${Gt(gl.reduce((s, g) => s + g.aulas.length, 0), "aula", "aulas")}</span></h3>`, O`<span class="flex gap-1"><button type="button" class="btn btn-outline btn-sm" data-nova-aula="${c.id}|${m.id}"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Aula</button>${btn(`data-modulo-renomear="${m.id}"`, "pencil", "Renomear módulo")}${btn(`data-modulo-excluir="${m.id}"`, "trash-2", "Excluir módulo")}</span>`)}
+            ${gl.map(g => O`<details class="mt-2" data-k="f|${m.id}|${chaveFoco(g.foco)}" ${mfAberto("f|" + m.id + "|" + chaveFoco(g.foco))}><summary class="cursor-pointer py-1">${mfCaminho(g.foco)} <span class="muted text-xs">${g.aulas.length}</span></summary><ul class="divide-y divide-slate-100 dark:divide-slate-800">${g.aulas.map(a => linhaAula(a))}</ul></details>`)}
+          </details>`;
+        })}
           <button type="button" class="btn btn-ghost btn-sm" data-novo-modulo="${c.id}"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Módulo</button>
-        </div></section>`;
+        </div></details>`;
     });
   }
-  function vFoco() {
-    const aulas = d.aulas.slice().sort(criado), q = qy;
-    const voltar = (href, rot) => O`<a href="${href}" class="btn btn-ghost btn-sm -ml-2"><i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>${rot}</a>`;
-    if (q.foco) {
-      const [area, sub, foco] = q.foco.split("|"), doFoco = aulas.filter(a => chaveFoco(a) === q.foco);
-      const cursos = [...new Set(doFoco.map(a => a.cursoId))].map(cursoPorId).filter(Boolean).sort(criado);
-      return O`<div>${voltar("#/aulas?visao=foco&area=" + encodeURIComponent(area), area)}</div>
-        <div class="mb-1">${mfCaminho({ area, subarea: sub, foco })}</div>
-        ${cursos.length ? O`<section class="card space-y-4">${cursos.map(c => O`<div>
-            <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold"><i data-lucide="graduation-cap" class="h-4 w-4" aria-hidden="true"></i>${c.nome}</h3>
-            <div class="space-y-3 border-l-2 border-slate-200 pl-3 dark:border-slate-700">${modulosDo(c.id).filter(m => doFoco.some(a => a.moduloId === m.id)).map(m => O`<div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">${m.nome}</p>
-                <ul class="divide-y divide-slate-100 dark:divide-slate-800">${doFoco.filter(a => a.moduloId === m.id).sort(criado).map(linhaAula)}</ul></div>`)}</div></div>`)}</section>` : $n("graduation-cap", "Nenhuma aula neste foco", "")}`;
+  function secaoAulas(k, chaveSec, titulo, lista, sid, extra = "") {
+    const setas = a => { const g = grupo(k, sid); return { primeiro: g[0] && g[0].id === a.id, ultimo: g[g.length - 1] && g[g.length - 1].id === a.id }; };
+    return O`<details class="card" data-k="${chaveSec}" ${mfAberto(chaveSec)}>${resumo("", O`<h3 class="text-sm font-semibold">${titulo} <span class="muted text-xs font-normal">${Gt(lista.length, "aula", "aulas")}</span></h3>`, extra)}
+      ${lista.length ? O`<ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">${lista.map(a => linhaAula(a, { setas: setas(a), contexto: !0 }))}</ul>` : O`<p class="muted mt-2 text-sm">Nenhuma aula aqui.</p>`}</details>`;
+  }
+  function vFocoAulas() {
+    const k = qy.foco, [area, sub, foco] = k.split("|"), seq = sequencia(k), subs = subfocosDo(k);
+    const links = O`<div class="inline-flex rounded-full border border-slate-200 p-0.5 text-sm dark:border-slate-700" role="group" aria-label="Agrupar por">
+      <a href="#/aulas?visao=foco&foco=${encodeURIComponent(k)}&agrupar=subfoco" class="rounded-full px-3 py-1 ${agrupar === "subfoco" ? "bg-brand text-white" : "text-slate-600 dark:text-slate-300"}">Por subfoco</a>
+      <a href="#/aulas?visao=foco&foco=${encodeURIComponent(k)}&agrupar=curso" class="rounded-full px-3 py-1 ${agrupar === "curso" ? "bg-brand text-white" : "text-slate-600 dark:text-slate-300"}">Por curso</a></div>`;
+    let corpo;
+    if (!seq.length && !subs.length) corpo = $n("graduation-cap", "Nenhuma aula neste foco", "");
+    else if (agrupar === "curso") {
+      const cursos = [...new Set(seq.map(a => a.cursoId))].map(cursoPorId).filter(Boolean).sort(criado);
+      corpo = O`${cursos.map(c => O`<details class="card" data-k="fc|${k}|${c.id}" ${mfAberto("fc|" + k + "|" + c.id)}>${resumo("", O`<h3 class="flex items-center gap-2 text-sm font-semibold"><i data-lucide="graduation-cap" class="h-4 w-4" aria-hidden="true"></i>${c.nome}</h3>`)}
+        <div class="mt-2 space-y-2 border-l-2 border-slate-200 pl-3 dark:border-slate-700">${modulosDo(c.id).filter(m => seq.some(a => a.moduloId === m.id)).map(m => O`<details data-k="fm|${k}|${m.id}" ${mfAberto("fm|" + k + "|" + m.id)}><summary class="cursor-pointer py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">${m.nome}</summary><ul class="divide-y divide-slate-100 dark:divide-slate-800">${seq.filter(a => a.moduloId === m.id).sort(porOrdem).map(a => linhaAula(a))}</ul></details>`)}</div></details>`)}`;
+    } else {
+      corpo = O`${subs.map(s => secaoAulas(k, "fs|" + s.id, s.nome, grupo(k, s.id), s.id, O`<span class="flex gap-1">${btn(`data-subfoco-renomear="${s.id}"`, "pencil", "Renomear subfoco")}${btn(`data-subfoco-excluir="${s.id}"`, "trash-2", "Excluir subfoco")}</span>`))}${grupo(k, "").length || !subs.length ? secaoAulas(k, "fs|" + k + "|sem", subs.length ? "Sem subfoco" : "Aulas", grupo(k, ""), "") : ""}`;
     }
-    if (q.area) {
-      const doArea = aulas.filter(a => a.area === q.area), subs = {};
+    return O`<div><a href="#/aulas?visao=foco&area=${encodeURIComponent(area)}" class="btn btn-ghost btn-sm -ml-2"><i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>${area}</a></div>
+      <div class="flex flex-wrap items-center justify-between gap-2"><div>${mfCaminho({ area, subarea: sub, foco })}</div>
+        <div class="flex flex-wrap items-center gap-2">${links}<button type="button" class="btn btn-outline btn-sm" data-novo-subfoco="${k}"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Subfoco</button>${mfBotoesSecoes()}</div></div>
+      <div class="space-y-3">${corpo}</div>
+      <div class="pt-3">${mfBotaoTreinar(area, sub, foco)}</div>`;
+  }
+  function vFoco() {
+    const aulas = d.aulas;
+    if (qy.foco) return vFocoAulas();
+    if (qy.area) {
+      const doArea = aulas.filter(a => a.area === qy.area), subs = {};
       doArea.forEach(a => { const s = subs[a.subarea] = subs[a.subarea] || {}; s[a.foco] = (s[a.foco] || 0) + 1; });
-      const nomes = Object.keys(subs).sort((x, y) => cmpFoco({ area: q.area, subarea: x, foco: "" }, { area: q.area, subarea: y, foco: "" }));
-      return O`<div>${voltar("#/aulas?visao=foco", "Áreas")}</div>
-        <div class="mb-1">${Vt(q.area)}</div>
-        ${nomes.length ? O`<div class="space-y-3">${nomes.map(sn => O`<section class="card"><h2 class="mb-2 text-sm font-semibold">${sn}</h2>
-          <ul class="divide-y divide-slate-100 dark:divide-slate-800">${Object.keys(subs[sn]).sort((x, y) => cmpFoco({ area: q.area, subarea: sn, foco: x }, { area: q.area, subarea: sn, foco: y })).map(fn => O`<li><a href="#/aulas?visao=foco&foco=${encodeURIComponent(q.area + "|" + sn + "|" + fn)}" class="flex items-center justify-between gap-3 py-2.5 text-sm hover:underline"><span class="min-w-0 truncate">${fn}</span><span class="shrink-0 tabular-nums font-semibold">${subs[sn][fn]}</span></a></li>`)}</ul></section>`)}</div>` : $n("graduation-cap", "Nenhuma aula nesta área", "")}`;
+      const nomes = Object.keys(subs).sort((x, y) => cmpFoco({ area: qy.area, subarea: x, foco: "" }, { area: qy.area, subarea: y, foco: "" }));
+      return O`<div><a href="#/aulas?visao=foco" class="btn btn-ghost btn-sm -ml-2"><i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>Áreas</a></div>
+        <div class="mb-1">${Vt(qy.area)}</div>
+        ${nomes.length ? O`<div class="space-y-3">${nomes.map(sn => O`<details class="card" data-k="as|${qy.area}|${sn}" ${mfAberto("as|" + qy.area + "|" + sn)}>${resumo("", O`<h2 class="text-sm font-semibold">${sn}</h2>`)}
+          <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">${Object.keys(subs[sn]).sort((x, y) => cmpFoco({ area: qy.area, subarea: sn, foco: x }, { area: qy.area, subarea: sn, foco: y })).map(fn => O`<li><a href="#/aulas?visao=foco&foco=${encodeURIComponent(qy.area + "|" + sn + "|" + fn)}" class="flex items-center justify-between gap-3 py-2.5 text-sm hover:underline"><span class="min-w-0 truncate">${fn}</span><span class="shrink-0 tabular-nums font-semibold">${subs[sn][fn]}</span></a></li>`)}</ul></details>`)}</div>` : $n("graduation-cap", "Nenhuma aula nesta área", "")}`;
     }
     const todas = (Ee.taxonomia || { areas: [] }).areas.map(a => a.nome);
     return O`<div class="grid gap-3 sm:grid-cols-2">${todas.map(a => { const n = aulas.filter(x => x.area === a).length; return O`<a href="#/aulas?visao=foco&area=${encodeURIComponent(a)}" class="card flex items-center justify-between gap-3 p-4 hover:shadow-md">${Vt(a)}<span class="muted text-xs tabular-nums">${Gt(n, "aula", "aulas")}</span></a>`; })}</div>`;
@@ -3068,7 +3244,7 @@ var mfVAulas = { render: async function (r, { query: qy, navegar: e }) {
     return vazios.length ? O`<section class="card"><h2 class="mb-2 text-sm font-semibold">Cursos sem aulas ainda</h2><ul class="space-y-1 text-sm">${vazios.map(c => O`<li><a href="#/aulas?visao=curso" class="hover:underline">${c.nome}</a></li>`)}</ul></section>` : "";
   }
   function desenhar() {
-    const cursos = d.cursos.length;
+    const cursos = d.cursos.length, raiz = visao === "foco" && !qy.area && !qy.foco;
     r.innerHTML = String(O`
       <div class="flex flex-wrap items-end justify-between gap-3">
         <h1 class="h1">Aulas</h1>
@@ -3077,39 +3253,58 @@ var mfVAulas = { render: async function (r, { query: qy, navegar: e }) {
             <a href="#/aulas?visao=foco" class="rounded-full px-3 py-1 ${visao === "foco" ? "bg-brand text-white" : "text-slate-600 dark:text-slate-300"}" ${visao === "foco" ? ot('aria-current="true"') : ""}>Por foco</a>
             <a href="#/aulas?visao=curso" class="rounded-full px-3 py-1 ${visao === "curso" ? "bg-brand text-white" : "text-slate-600 dark:text-slate-300"}" ${visao === "curso" ? ot('aria-current="true"') : ""}>Por curso</a>
           </div>
+          ${visao === "curso" ? mfBotoesSecoes() : ""}
           <button type="button" class="btn btn-primary btn-sm" data-novo-curso><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Curso</button>
         </div>
       </div>
-      <div class="mt-5 space-y-4">${visao === "curso" ? vCurso() : vFoco()}${visao === "foco" && !qy.area && !qy.foco ? vVazios() : ""}</div>
+      <div class="mt-5 space-y-4">${visao === "curso" ? vCurso() : vFoco()}${raiz ? vVazios() : ""}</div>
       ${!cursos ? $n("graduation-cap", "Nenhum curso ainda", "") : ""}`);
     jn(r);
   }
   async function carregar() { d = await ge("listarAulas"); desenhar(); }
+  mfLigarSecoes(r);
   r.addEventListener("click", async ev => {
     const t = ev.target;
+    if (t.closest("summary") && t.closest("button")) ev.preventDefault();
     const nomear = async (titulo, atual, aoSalvar) => pn({ titulo, confirmar: "Salvar", corpo: O`<label class="label" for="nm-txt">Nome</label><input id="nm-txt" name="nome" class="input" maxlength="120" required value="${atual}">`,
       onSubmit: async v => { await aoSalvar(v.nome.trim()); await carregar(); } });
+    let b;
+    if ((b = t.closest("[data-abrir-todos]"))) return mfAbrirTodos(r, b.dataset.abrirTodos === "1");
     if (t.closest("[data-novo-curso]")) return nomear("Novo curso", "", async nome => { await ge("criarCurso", { nome }); be("Curso criado.", "ok", 2000); });
-    if (t.closest("[data-curso-renomear]")) { const c = cursoPorId(t.closest("[data-curso-renomear]").dataset.cursoRenomear); return nomear("Renomear curso", c.nome, async nome => { await ge("renomearCurso", { id: c.id, nome }); }); }
-    if (t.closest("[data-curso-excluir]")) {
-      const c = cursoPorId(t.closest("[data-curso-excluir]").dataset.cursoExcluir);
+    if ((b = t.closest("[data-curso-renomear]"))) { const c = cursoPorId(b.dataset.cursoRenomear); return nomear("Renomear curso", c.nome, async nome => { await ge("renomearCurso", { id: c.id, nome }); }); }
+    if ((b = t.closest("[data-curso-excluir]"))) {
+      const c = cursoPorId(b.dataset.cursoExcluir);
       if (!await Ac(`Excluir o curso “${c.nome}” com todos os módulos e aulas? Os arquivos também serão apagados.`, { confirmar: "Excluir", perigo: !0, titulo: "Excluir curso" })) return;
       const res = await ge("excluirCurso", { id: c.id }); await mfApagarArquivos(res.arquivos); be("Curso excluído.", "ok", 2000); return carregar();
     }
-    if (t.closest("[data-novo-modulo]")) { const cid = t.closest("[data-novo-modulo]").dataset.novoModulo; return nomear("Novo módulo", "", async nome => { await ge("criarModulo", { cursoId: cid, nome }); be("Módulo criado.", "ok", 2000); }); }
-    if (t.closest("[data-modulo-renomear]")) { const m = d.modulos.find(x => x.id === t.closest("[data-modulo-renomear]").dataset.moduloRenomear); return nomear("Renomear módulo", m.nome, async nome => { await ge("renomearModulo", { id: m.id, nome }); }); }
-    if (t.closest("[data-modulo-excluir]")) {
-      const m = d.modulos.find(x => x.id === t.closest("[data-modulo-excluir]").dataset.moduloExcluir);
+    if ((b = t.closest("[data-novo-modulo]"))) { const cid = b.dataset.novoModulo; return nomear("Novo módulo", "", async nome => { await ge("criarModulo", { cursoId: cid, nome }); be("Módulo criado.", "ok", 2000); }); }
+    if ((b = t.closest("[data-modulo-renomear]"))) { const m = moduloPorId(b.dataset.moduloRenomear); return nomear("Renomear módulo", m.nome, async nome => { await ge("renomearModulo", { id: m.id, nome }); }); }
+    if ((b = t.closest("[data-modulo-excluir]"))) {
+      const m = moduloPorId(b.dataset.moduloExcluir);
       if (!await Ac(`Excluir o módulo “${m.nome}” com suas aulas? Os arquivos também serão apagados.`, { confirmar: "Excluir", perigo: !0, titulo: "Excluir módulo" })) return;
       const res = await ge("excluirModulo", { id: m.id }); await mfApagarArquivos(res.arquivos); be("Módulo excluído.", "ok", 2000); return carregar();
     }
-    if (t.closest("[data-nova-aula]")) { const [cid, mid] = t.closest("[data-nova-aula]").dataset.novaAula.split("|"); return mfFormAula({ cursoId: cid, moduloId: mid, aoSalvar: carregar }); }
-    if (t.closest("[data-abrir-aula]")) return mfAbrirAula(d.aulas.find(x => x.id === t.closest("[data-abrir-aula]").dataset.abrirAula));
-    if (t.closest("[data-editar-aula]")) { const a = d.aulas.find(x => x.id === t.closest("[data-editar-aula]").dataset.editarAula); return mfFormAula({ aula: a, aoSalvar: carregar }); }
-    if (t.closest("[data-excluir-aula]")) {
-      const a = d.aulas.find(x => x.id === t.closest("[data-excluir-aula]").dataset.excluirAula);
+    if ((b = t.closest("[data-novo-subfoco]"))) { const [area, subarea, foco] = b.dataset.novoSubfoco.split("|"); return nomear("Novo subfoco", "", async nome => { await ge("criarSubfoco", { area, subarea, foco, nome }); be("Subfoco criado.", "ok", 2000); }); }
+    if ((b = t.closest("[data-subfoco-renomear]"))) { const s = d.subfocos.find(x => x.id === b.dataset.subfocoRenomear); return nomear("Renomear subfoco", s.nome, async nome => { await ge("renomearSubfoco", { id: s.id, nome }); }); }
+    if ((b = t.closest("[data-subfoco-excluir]"))) {
+      const s = d.subfocos.find(x => x.id === b.dataset.subfocoExcluir);
+      if (!await Ac(`Excluir o subfoco “${s.nome}”? As aulas dele continuam no foco, sem subfoco.`, { confirmar: "Excluir", perigo: !0, titulo: "Excluir subfoco" })) return;
+      await ge("excluirSubfoco", { id: s.id }); be("Subfoco excluído.", "ok", 2000); return carregar();
+    }
+    if ((b = t.closest("[data-nova-aula]"))) { const [cid, mid] = b.dataset.novaAula.split("|"); return mfFormAula({ cursoId: cid, moduloId: mid, subfocos: d.subfocos, aoSalvar: carregar }); }
+    if ((b = t.closest("[data-abrir-aula]"))) { const a = d.aulas.find(x => x.id === b.dataset.abrirAula); return mfAbrirAula(a, sequencia(chaveFoco(a))); }
+    if ((b = t.closest("[data-editar-aula]"))) { const a = d.aulas.find(x => x.id === b.dataset.editarAula); return mfFormAula({ aula: a, subfocos: d.subfocos, aoSalvar: carregar }); }
+    if ((b = t.closest("[data-excluir-aula]"))) {
+      const a = d.aulas.find(x => x.id === b.dataset.excluirAula);
       if (!await Ac(`Excluir a aula “${a.titulo}”?`, { confirmar: "Excluir", perigo: !0, titulo: "Excluir aula" })) return;
       const res = await ge("excluirAula", { id: a.id }); await mfApagarArquivos(res.arquivos); be("Aula excluída.", "ok", 2000); return carregar();
+    }
+    if ((b = t.closest("[data-mover]"))) {
+      const [id, dir] = b.dataset.mover.split("|"), a = d.aulas.find(x => x.id === id), g = grupo(chaveFoco(a), a.subfocoId), i = g.findIndex(x => x.id === id), j = i + Number(dir);
+      if (j < 0 || j >= g.length) return;
+      [g[i], g[j]] = [g[j], g[i]];
+      try { await ge("ordenarAulas", { itens: g.map((x, n) => ({ id: x.id, subfocoId: x.subfocoId || "", ordem: n + 1 })) }); } catch (x) { return be(x.message, "erro"); }
+      return carregar();
     }
   });
   r.innerHTML = String(Wi(3));
