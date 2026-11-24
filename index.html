@@ -2385,7 +2385,8 @@ function mfCamposTax(v = {}, areas = mfAreasFlash()) {
     <div><label class="label" for="t-area">Área</label><select id="t-area" name="area" class="input" data-tax="area">${areas.map(a => O`<option ${a === v.area ? ot("selected") : ""}>${a}</option>`)}</select></div>
     <div><label class="label" for="t-sub">Subárea</label><select id="t-sub" name="subarea" class="input" data-tax="sub"></select></div>
     <div><label class="label" for="t-foco">Foco</label><select id="t-foco" name="foco" class="input" data-tax="foco"></select></div>
-    <div id="t-novo-wrap" class="hidden sm:col-span-3"><label class="label" for="t-novo">Nome do novo foco</label><input id="t-novo" name="novoFoco" class="input" maxlength="120" placeholder="Ex.: Doenças Exantemáticas" autocomplete="off"></div>
+    <div id="t-nova-sub-wrap" class="hidden sm:col-span-3"><label class="label" for="t-nova-sub">Nome da nova subárea</label><input id="t-nova-sub" name="novaSub" class="input" maxlength="120" placeholder="Ex.: Infectologia pediátrica" autocomplete="off"></div>
+    <div id="t-novo-wrap" class="hidden sm:col-span-3"><label class="label" for="t-novo" id="t-novo-l">Nome do novo foco</label><input id="t-novo" name="novoFoco" class="input" maxlength="120" placeholder="Ex.: Doenças Exantemáticas" autocomplete="off"></div>
   </div>`;
 }
 function mfLigarTax(raiz, v = {}) {
@@ -2395,21 +2396,37 @@ function mfLigarTax(raiz, v = {}) {
   v = { ...v };
   let opcoes = (el, lista, sel) => { el.innerHTML = String(O`${lista.map(x => O`<option ${x === sel ? ot("selected") : ""}>${x}</option>`)}`); };
   let wrap = raiz.querySelector("#t-novo-wrap"), novo = raiz.querySelector("#t-novo");
-  let mostrarNovo = () => { let on = f.value === "__novo__"; wrap && wrap.classList.toggle("hidden", !on); on && novo && novo.focus(); };
+  let wrapS = raiz.querySelector("#t-nova-sub-wrap"), novaS = raiz.querySelector("#t-nova-sub"), rotNovo = raiz.querySelector("#t-novo-l");
+  let mostrarNovo = () => {
+    let nova = s.value === "__nova__", on = nova || f.value === "__novo__";
+    wrapS && wrapS.classList.toggle("hidden", !nova); wrap && wrap.classList.toggle("hidden", !on);
+    rotNovo && (rotNovo.textContent = nova ? "Nome do primeiro foco da nova subárea" : "Nome do novo foco");
+    on && (nova && novaS && !novaS.value ? novaS : novo) && (nova && novaS && !novaS.value ? novaS : novo).focus();
+  };
   let porSub = () => {
+    if (s.value === "__nova__") { f.innerHTML = '<option value="__novo__">➕ Primeiro foco da nova subárea</option>'; mostrarNovo(); return; }
     let sub = mfSubareas(a.value).find(x => x.nome === s.value);
     opcoes(f, sub ? sub.focos : [], v.foco);
     f.insertAdjacentHTML("beforeend", '<option value="__novo__">➕ Criar novo foco…</option>');
     mostrarNovo();
   };
   f.addEventListener("change", mostrarNovo);
-  let porArea = () => { opcoes(s, mfSubareas(a.value).map(x => x.nome), v.subarea); porSub(); };
+  let porArea = () => { opcoes(s, mfSubareas(a.value).map(x => x.nome), v.subarea); mfAdmin() && s.insertAdjacentHTML("beforeend", '<option value="__nova__">➕ Criar nova subárea…</option>'); porSub(); };
   a.addEventListener("change", () => { v = {}; porArea(); });
   s.addEventListener("change", () => { v.foco = null; porSub(); });
   porArea();
 }
 /** Se "Criar novo foco…" foi escolhido, cria o foco na taxonomia (só usuário 02) e devolve os valores já com o nome novo. */
 async function mfResolverFoco(v) {
+  if (v.subarea === "__nova__") {
+    let ns = String(v.novaSub || "").trim(), nf = String(v.novoFoco || "").trim();
+    if (!ns) throw new Error("Digite o nome da nova subárea.");
+    if (!nf) throw new Error("Digite o nome do primeiro foco da nova subárea.");
+    let ex = mfSubareas(v.area).find(x => x.nome === ns);
+    if (!ex) { let r = await ge("taxAdicionarSubarea", { area: v.area, subarea: ns, foco: nf }); r && r.taxonomia && (Ee.taxonomia = r.taxonomia); be(`Subárea “${ns}” criada em ${v.area}.`, "ok", 3500); }
+    else if (!ex.focos.includes(nf)) { let r = await ge("taxAdicionarFoco", { area: v.area, subarea: ns, foco: nf }); r && r.taxonomia && (Ee.taxonomia = r.taxonomia); }
+    return { ...v, subarea: ns, foco: nf };
+  }
   if (v.foco !== "__novo__") return v;
   let nome = String(v.novoFoco || "").trim();
   if (!nome) throw new Error("Digite o nome do novo foco.");
@@ -3467,7 +3484,8 @@ var mfVReclass = { render: async function (r, { query: qy }) {
     const tax = areasTax(), aA = tax.find(a => a.nome === ab.area), sA = aA && aA.subareas.find(s => s.nome === ab.sub);
     return O`<div class="space-y-3">
       <div class="flex flex-wrap gap-2" role="group" aria-label="Área">${tax.map(a => Vt(a.nome, { botao: !0, pressionado: ab.area === a.nome }))}</div>
-      ${aA ? O`<div class="flex flex-wrap gap-2" role="group" aria-label="Subárea">${aA.subareas.map(s => O`<button type="button" class="btn btn-outline btn-sm" data-sub="${s.nome}" aria-pressed="${ab.sub === s.nome}">${s.nome}</button>`)}</div>` : ""}
+      ${aA ? O`<div class="flex flex-wrap gap-2" role="group" aria-label="Subárea">${aA.subareas.map(s => O`<button type="button" class="btn btn-outline btn-sm" data-sub="${s.nome}" aria-pressed="${ab.sub === s.nome}">${s.nome}</button>`)}</div>
+      <form class="flex flex-wrap gap-2" data-nova-sub><label class="sr-only" for="rc-ns">Nova subárea em ${ab.area}</label><input id="rc-ns" name="sub" class="input min-w-[10rem] flex-1 py-1.5" maxlength="120" placeholder="Nova subárea em ${ab.area}" required><label class="sr-only" for="rc-nsf">Primeiro foco</label><input id="rc-nsf" name="foco" class="input min-w-[10rem] flex-1 py-1.5" maxlength="120" placeholder="Primeiro foco" required><button class="btn btn-outline btn-sm shrink-0" type="submit">Criar e mover</button></form>` : ""}
       ${sA ? O`<ul class="divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-700">${sA.focos.map(fo => { const atual = q.area === ab.area && q.subarea === ab.sub && q.foco === fo; return O`<li><button type="button" class="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800" data-foco="${fo}" ${movendo ? ot("disabled") : ""}><span class="min-w-0">${fo}</span>${atual ? O`<span class="muted shrink-0 text-xs">atual</span>` : ""}</button></li>`; })}
         <li class="p-2"><form class="flex gap-2" data-novo-foco><label class="sr-only" for="rc-novo">Novo foco</label><input id="rc-novo" name="foco" class="input py-1.5" maxlength="120" placeholder="Criar novo foco aqui" required><button class="btn btn-outline btn-sm shrink-0" type="submit">Criar e mover</button></form></li></ul>` : ""}
     </div>`;
@@ -3519,6 +3537,13 @@ var mfVReclass = { render: async function (r, { query: qy }) {
     if ((b = t.closest("[data-foco]")) && !movendo) return mover(ab.area, ab.sub, b.dataset.foco);
   });
   r.addEventListener("submit", async ev => {
+    const fs = ev.target.closest("[data-nova-sub]");
+    if (fs) {
+      ev.preventDefault();
+      const sub = fs.sub.value.trim(), foco = fs.foco.value.trim(); if (!sub || !foco) return;
+      try { const res = await ge("taxAdicionarSubarea", { area: ab.area, subarea: sub, foco }); res && res.taxonomia && (Ee.taxonomia = res.taxonomia); await mover(ab.area, sub, foco); } catch (x) { be(x.message, "erro", 6000); }
+      return;
+    }
     const fm = ev.target.closest("[data-novo-foco]"); if (!fm) return;
     ev.preventDefault();
     const nome = fm.foco.value.trim(); if (!nome) return;
@@ -3623,7 +3648,7 @@ var mfVNovaProva = { render: async function (r) {
     const v = id => r.querySelector(id).value, disc = r.querySelector('[name="np-tipo"]:checked').value === "disc";
     r.querySelector("#np-erro").classList.add("hidden");
     try {
-      let tax = { area: v("#t-area"), subarea: v("#t-sub"), foco: v("#t-foco"), novoFoco: r.querySelector("#t-novo") ? v("#t-novo") : "" };
+      let tax = { area: v("#t-area"), subarea: v("#t-sub"), foco: v("#t-foco"), novoFoco: r.querySelector("#t-novo") ? v("#t-novo") : "", novaSub: r.querySelector("#t-nova-sub") ? v("#t-nova-sub") : "" };
       tax = await mfResolverFoco(tax);
       const num = Number(v("#np-num")), enun = v("#np-enun").trim();
       if (!Number.isInteger(num) || num < 1) throw new Error("Número da questão inválido.");
