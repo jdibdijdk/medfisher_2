@@ -400,6 +400,7 @@ var ACOES = {
   reportarProblema: reportarProblema_,
   renomearProva: renomearProva_,
   excluirProva: excluirProva_,
+  excluirQuestao: excluirQuestao_,
   renomearTrilha: renomearTrilha_,
   renomearSessao: renomearSessao_,
   excluirSessao: excluirSessao_,
@@ -1523,6 +1524,32 @@ function renomearProva_(u, p) {
   return { provaId: provaId, instituicao: inst, ano: ano, questoes: minhas.length };
 }
 
+/** Remove uma questão de prova Autoral (e as respostas e favoritas dela). */
+function excluirQuestao_(u, p) {
+  exigirAdmin_(u);
+  var id = str_(p.id), pos = idMap_()[id];
+  if (pos === undefined) throw erro_('Questão não encontrada.');
+  var q = indice_()[pos], provaId = q[I_PROVA];
+  if (((selecaoDasProvas_()[provaId] || {}).selecao || '') !== 'Autoral') throw erro_('Só é possível excluir questões de provas Autorais. Nas demais, exclua a prova inteira.');
+  var restam = indice_().filter(function (x) { return x[I_PROVA] === provaId && x[I_ID] !== id; }).length;
+  comLock_(function () {
+    apagarLinhas_('Questoes', function (r) { return String(r[0]) === id; });
+    var dela = function (r) { return String(r[1]) === id; };
+    apagarLinhas_('Respostas', dela);
+    apagarLinhas_('Favoritas', dela);
+    apagarLinhas_('Anotacoes', dela);
+    invalidarCache_();
+    try { CacheService.getScriptCache().remove('q:' + id); } catch (e) { /* ignore */ }
+    for (var k = 1; k <= 20; k++) invalidarEstado_((k < 10 ? '0' : '') + k);
+    if (!restam) {
+      var ms = selecoesSalvas_(), mt = turmasSalvas_();
+      if (ms[provaId] !== undefined) { delete ms[provaId]; upsertConfig_('selecoes', JSON.stringify(ms)); }
+      if (mt[provaId] !== undefined) { delete mt[provaId]; upsertConfig_('turmas', JSON.stringify(mt)); }
+    }
+  });
+  return { id: id, provaId: provaId, restam: restam };
+}
+
 function excluirProva_(u, p) {
   var provaId = str_(p.provaId);
   if (!provaId) throw erro_('Informe a prova.');
@@ -1724,14 +1751,18 @@ function editarQuestao_(u, p) {
   });
   var entrada = {
     numero: q.numero, id: q.id, area: str_(p.area), subarea: str_(p.subarea), foco: str_(p.foco), enunciado: p.enunciado, alternativas: alts,
-    gabarito: p.gabarito, anulada: !!p.anulada, comentario: p.comentario, imagens: q.imagens, confianca_classificacao: q.confianca
+    gabarito: p.gabarito, anulada: !!p.anulada, comentario: p.comentario, imagens: Array.isArray(p.imagens) ? p.imagens.map(function (m) { return { arquivo: m && m.arquivo, posicao: m && m.posicao, legenda: m && m.legenda }; }) : q.imagens, confianca_classificacao: q.confianca
   };
   var n = normalizar_(entrada, { id: q.provaId, instituicao: q.instituicao, ano: q.ano, nome: q.provaNome });
   if (n.erro) throw erro_(n.erro);
   var ob = n.ok, antes = { gab: String(gabarito_(id)), anul: !!q.anulada }, recalc = false;
+  var exist = {};
+  q.imagens.forEach(function (m) { exist[m.arquivo] = m; });
+  ob.imagens = ob.imagens.map(function (m) { var e = exist[m.arquivo]; return e ? { arquivo: m.arquivo, posicao: m.posicao, legenda: m.legenda, fileId: e.fileId || '' } : m; });
   comLock_(function () {
     if (n.novoTax) acrescentarTax_([n.novoTax]);
     sh_('Questoes').getRange(pos + 2, 6, 1, 8).setValues([[ob.area, ob.subarea, ob.foco, ob.enunciado, JSON.stringify(ob.alternativas), ob.gabarito, ob.anulada ? 'S' : 'N', ob.comentario]]);
+    sh_('Questoes').getRange(pos + 2, 14).setValue(JSON.stringify(ob.imagens));
     esquecerQuestoes_([id]);
     if (alts.length && (antes.gab !== ob.gabarito || antes.anul !== ob.anulada)) {
       recalc = true;
@@ -1741,6 +1772,7 @@ function editarQuestao_(u, p) {
   });
   var r = questao_(id);
   r.notasRecalculadas = recalc;
+  r.paraUpload = ob.imagens.filter(function (m) { return !m.fileId; }).map(function (m) { return { questaoId: id, arquivo: m.arquivo }; });
   return r;
 }
 
@@ -2630,7 +2662,11 @@ async function mfEditarQuestao(id, aposSalvar) {
   let q;
   try { q = await ge("questaoCompleta", { id }); } catch (x) { return be(x.message, "erro"); }
   let disc = !(q.alternativas || []).length;
-  await mfModalTax({ titulo: `Editar questão ${q.numero} · ${q.instituicao} ${mfAno(q)}`, largo: !0, confirmar: "Salvar", corpo: mfCamposQuestao(q), onSubmit: async v => {
+  const POS_FOTO = ["enunciado", "comentario", ...(disc ? [] : MF_LETRAS.map(l => "alternativa_" + l))];
+  const rotPos = p => p === "enunciado" ? "No enunciado" : p === "comentario" ? "Na resolução" : "Na alternativa " + p.slice(-1);
+  let fotos = (q.imagens || []).map(m => ({ arquivo: m.arquivo, pos: m.posicao, leg: m.legenda || "", fileId: m.fileId || "", url: "", file: null }));
+  const corpoFotos = O`<div class="mt-3"><label class="label" for="eq-fotos">Fotos</label><input id="eq-fotos" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" class="input py-1.5"><ul id="eq-imgs" class="mt-3 space-y-2"></ul></div>`;
+  const prom = mfModalTax({ titulo: `Editar questão ${q.numero} · ${q.instituicao} ${mfAno(q)}`, largo: !0, confirmar: "Salvar", corpo: O`${mfCamposQuestao(q)}${corpoFotos}`, onSubmit: async v => {
     v = await mfResolverFoco(v);
     let alternativas = [], pulou = !1;
     if (!disc) {
@@ -2642,10 +2678,32 @@ async function mfEditarQuestao(id, aposSalvar) {
       });
       if (alternativas.length < 4) throw new Error("A questão precisa de 4 ou 5 alternativas.");
     }
-    let nova = await ge("editarQuestao", { id: q.id, enunciado: v.enunciado, alternativas, gabarito: v.gabarito, anulada: !!v.anulada, comentario: v.comentario, area: v.area, subarea: v.subarea, foco: v.foco });
-    be(nova.notasRecalculadas ? "Questão atualizada. Os acertos já registrados foram recalculados." : "Questão atualizada.", "ok", 4e3);
+    let nova = await ge("editarQuestao", { id: q.id, enunciado: v.enunciado, alternativas, gabarito: v.gabarito, anulada: !!v.anulada, comentario: v.comentario, area: v.area, subarea: v.subarea, foco: v.foco, imagens: fotos.map(m => ({ arquivo: m.arquivo, posicao: m.pos, legenda: m.leg })) });
+    let falhas = [];
+    for (const up of nova.paraUpload || []) { const m = fotos.find(x => x.arquivo === up.arquivo); if (m && m.file) try { await mfUploadImgQuestao(q.id, up.arquivo, m.file); } catch { falhas.push(m.file.name); } }
+    be(falhas.length ? `Questão salva, mas ${Gt(falhas.length, "foto não foi enviada", "fotos não foram enviadas")}: ${falhas.join(", ")}` : nova.notasRecalculadas ? "Questão atualizada. Os acertos já registrados foram recalculados." : "Questão atualizada.", falhas.length ? "erro" : "ok", falhas.length ? 8e3 : 4e3);
     aposSalvar && await aposSalvar(nova);
   } }, q);
+  const dlg = document.querySelector("dialog[open]"), ul = dlg && dlg.querySelector("#eq-imgs");
+  if (ul) {
+    const desenhar = () => {
+      ul.innerHTML = String(O`${fotos.map((m, k) => O`<li class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-2 dark:border-slate-700">${m.url ? O`<img src="${m.url}" alt="" class="h-14 w-14 rounded-lg object-cover">` : O`<span class="muted flex h-14 w-14 items-center justify-center rounded-lg bg-slate-100 text-[10px] dark:bg-slate-800">foto</span>`}
+        <select class="input w-auto py-1.5 text-xs" data-ef-pos="${k}">${POS_FOTO.map(p => O`<option value="${p}" ${p === m.pos ? ot("selected") : ""}>${rotPos(p)}</option>`)}</select>
+        <input class="input min-w-[8rem] flex-1 py-1.5 text-xs" data-ef-leg="${k}" maxlength="200" placeholder="Legenda (opcional)" value="${m.leg}">
+        <button type="button" class="btn btn-ghost btn-sm px-2" data-ef-rem="${k}" aria-label="Remover foto" title="Remover"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button></li>`)}`);
+      jn(ul);
+    };
+    desenhar();
+    fotos.forEach(async m => { if (m.fileId && window.__imagem) { try { m.url = (await window.__imagem(m.fileId)) || ""; desenhar(); } catch {} } });
+    dlg.addEventListener("change", ev => {
+      const t = ev.target;
+      if (t.id === "eq-fotos") { [...t.files].forEach((f, k) => fotos.push({ arquivo: `e${Date.now().toString(36)}${k}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg").replace("svg+xml", "svg")}`, pos: "enunciado", leg: "", fileId: "", url: URL.createObjectURL(f), file: f })); t.value = ""; desenhar(); }
+      if (t.dataset.efPos !== void 0) fotos[Number(t.dataset.efPos)].pos = t.value;
+    });
+    dlg.addEventListener("input", ev => { if (ev.target.dataset.efLeg !== void 0) fotos[Number(ev.target.dataset.efLeg)].leg = ev.target.value; });
+    dlg.addEventListener("click", ev => { const b = ev.target.closest("[data-ef-rem]"); if (b) { fotos.splice(Number(b.dataset.efRem), 1); desenhar(); } });
+  }
+  return prom;
 }
 
 // ── Tamanho do texto das questões (A− / A+) ──
@@ -3605,17 +3663,17 @@ var mfVReclass = { render: async function (r, { query: qy }) {
 } };
 
 // ── Prova do zero (só usuário 02): cria a prova e as questões, com fotos, sem montar JSON ──
-var mfVNovaProva = { render: async function (r) {
+var mfVNovaProva = { render: async function (r, { query: qy }) {
   if (!mfAdmin()) { r.innerHTML = String($n("tag", "Acesso restrito", "Somente o usuário 02 pode criar provas.")); return; }
   await mfAtualizarTax();
   const SEL = ["R1", "R+", "Prova de Título", "Autoral"], LETRAS = ["A", "B", "C", "D", "E"];
-  let meta = null, provaId = "", numero = 1, imgs = [], salvas = [], salvando = !1, ultimaTax = { area: Yr[0], subarea: "", foco: "" };
+  let meta = null, provaId = "", numero = 1, imgs = [], questoesProva = [], autorais = [], salvando = !1, ultimaTax = { area: Yr[0], subarea: "", foco: "" };
   const turmaOk = t => /^(?:19|20)\d{2}\s*[-.\/]?\s*[ABab12]$/.test(t.trim());
   const turmaNorm = t => { const m = /^((?:19|20)\d{2})\s*[-.\/]?\s*([ABab12])$/.exec(t.trim()); return m[1] + ({ 1: "A", 2: "B" }[m[2]] || m[2].toUpperCase()); };
   const posOpcoes = () => [["enunciado", "No enunciado"], ["comentario", "Na resolução"], ...LETRAS.map(l => ["alternativa_" + l, "Na alternativa " + l])];
   function formProva() {
     const aut = (meta && meta.selecao === "Autoral") || (!meta);
-    return O`<section class="card" aria-labelledby="np-t1"><h2 id="np-t1" class="h2 mb-3">Prova</h2>
+    return O`${autorais.length ? O`<section class="card mb-4" aria-label="Provas autorais existentes"><h2 class="h2 mb-2">Continuar uma prova autoral</h2><ul class="divide-y divide-slate-100 dark:divide-slate-800">${autorais.map(p => O`<li><a href="#/prova-nova?prova=${encodeURIComponent(p.id)}" class="flex items-center justify-between gap-3 py-2.5 text-sm hover:underline"><span class="min-w-0 truncate">${p.instituicao} · ${mfAno(p)}</span><span class="muted shrink-0 text-xs">${Gt(p.total, "questão", "questões")}</span></a></li>`)}</ul></section>` : ""}<section class="card" aria-labelledby="np-t1"><h2 id="np-t1" class="h2 mb-3">Prova</h2>
       <form id="np-prova" class="grid gap-3 sm:grid-cols-2">
         <div><label class="label" for="np-sel">Seleção</label><select id="np-sel" name="selecao" class="input">${SEL.map(s => O`<option ${s === (meta ? meta.selecao : "Autoral") ? ot("selected") : ""}>${s}</option>`)}</select></div>
         <div><label class="label" for="np-inst" id="np-l-inst">${aut ? "Professor / nome da prova" : "Nome completo da prova"}</label><input id="np-inst" name="instituicao" class="input" maxlength="120" required value="${meta ? meta.instituicao : ""}"></div>
@@ -3626,7 +3684,7 @@ var mfVNovaProva = { render: async function (r) {
   }
   function resumoProva() {
     return O`<section class="card flex flex-wrap items-center justify-between gap-3"><div class="min-w-0"><p class="text-sm font-semibold">${meta.instituicao} ${meta.turma || meta.ano} · ${meta.selecao}</p>${meta.existente ? O`<p class="muted text-xs">Prova já existente: as novas questões serão adicionadas a ela.</p>` : ""}</div>
-      <div class="flex gap-2">${salvas.length ? "" : O`<button type="button" class="btn btn-ghost btn-sm" id="np-alterar">Alterar</button>`}<button type="button" class="btn btn-outline btn-sm" id="np-nova">Outra prova</button></div></section>`;
+      <div class="flex gap-2">${questoesProva.length ? "" : O`<button type="button" class="btn btn-ghost btn-sm" id="np-alterar">Alterar</button>`}<button type="button" class="btn btn-outline btn-sm" id="np-nova">Outra prova</button></div></section>`;
   }
   function formQuestao() {
     return O`<section class="card mt-4" aria-labelledby="np-t2"><h2 id="np-t2" class="h2 mb-3">Questão ${numero}</h2>
@@ -3654,8 +3712,17 @@ var mfVNovaProva = { render: async function (r) {
     jn(ul);
   }
   function listaSalvas() {
-    return salvas.length ? O`<section class="card mt-4" aria-label="Questões adicionadas"><h2 class="h2 mb-2">Adicionadas agora (${salvas.length})</h2><ul class="divide-y divide-slate-100 dark:divide-slate-800">${salvas.map(s => O`<li class="flex items-center justify-between gap-3 py-2 text-sm"><span class="min-w-0 truncate">Questão ${s.numero} · ${s.foco}</span><a class="shrink-0 font-semibold underline" href="#/q/${encodeURIComponent(s.id)}">Abrir questão</a></li>`)}</ul></section>` : "";
+    return questoesProva.length ? O`<section class="card mt-4" aria-label="Questões da prova"><h2 class="h2 mb-2">Questões da prova (${questoesProva.length})</h2><ul class="divide-y divide-slate-100 dark:divide-slate-800">${questoesProva.map(s => O`<li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm"><span class="min-w-0 flex-1">Questão ${s.numero} · ${s.foco}${s.anulada ? " · anulada" : ""}</span>
+      <span class="flex shrink-0 items-center gap-1"><a class="btn btn-ghost btn-sm" href="#/q/${encodeURIComponent(s.id)}">Abrir</a><button type="button" class="btn btn-ghost btn-sm" data-q-editar="${s.id}"><i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i>Editar</button><button type="button" class="btn btn-ghost btn-sm text-rose-700 dark:text-rose-400" data-q-excluir="${s.id}" data-n="${s.numero}"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>Excluir</button></span></li>`)}</ul></section>` : "";
   }
+  async function carregarQuestoes() {
+    if (!provaId) { questoesProva = []; return; }
+    let itens = [], pag = 1;
+    for (;;) { const l = await ge("listarQuestoes", { filtro: { provaId: [provaId], incluirAnuladas: !0 }, pagina: pag, tamanho: 200 }); itens = itens.concat(l.itens || []); if ((l.itens || []).length < 200) break; pag++; }
+    questoesProva = itens.sort((a, b) => a.numero - b.numero);
+    numero = questoesProva.reduce((m, x) => Math.max(m, x.numero), 0) + 1;
+  }
+  async function atualizarLista() { await carregarQuestoes(); const el = r.querySelector("#np-lista"); el && (el.innerHTML = String(listaSalvas())); const n = r.querySelector("#np-num"); n && (n.value = numero); const t = r.querySelector("#np-t2"); t && (t.textContent = "Questão " + numero); jn(r); }
   function desenhar() {
     r.innerHTML = String(O`<div><a href="#/importar" class="btn btn-ghost btn-sm -ml-2"><i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>Importar</a><h1 class="h1 mt-1">Criar prova do zero</h1></div>
       <div class="mt-4">${meta ? resumoProva() : formProva()}</div>${meta ? formQuestao() : ""}<div id="np-lista">${listaSalvas()}</div>`);
@@ -3678,8 +3745,13 @@ var mfVNovaProva = { render: async function (r) {
   r.addEventListener("click", ev => {
     let b;
     if ((b = ev.target.closest("[data-img-rem]"))) { const m = imgs.splice(Number(b.dataset.imgRem), 1)[0]; URL.revokeObjectURL(m.url); listaImgs(); }
+    if ((b = ev.target.closest("[data-q-editar]"))) mfEditarQuestao(b.dataset.qEditar, atualizarLista);
+    if ((b = ev.target.closest("[data-q-excluir]"))) {
+      const id = b.dataset.qExcluir, n = b.dataset.n;
+      Ac(`Excluir a questão ${n} desta prova? As respostas e favoritas dela também são apagadas. Não dá para desfazer.`, { confirmar: "Excluir", perigo: !0, titulo: "Excluir questão" }).then(async sim => { if (!sim) return; try { await ge("excluirQuestao", { id }); be(`Questão ${n} excluída.`, "ok", 2500); await atualizarLista(); } catch (x) { be(x.message, "erro", 6e3); } });
+    }
     if (ev.target.closest("#np-alterar")) { meta = null; desenhar(); }
-    if (ev.target.closest("#np-nova")) { meta = null; provaId = ""; salvas = []; imgs = []; numero = 1; desenhar(); }
+    if (ev.target.closest("#np-nova")) { meta = null; provaId = ""; questoesProva = []; imgs = []; numero = 1; location.hash.includes("prova=") ? (location.hash = "#/prova-nova") : desenhar(); }
     if (ev.target.closest("#np-concluir")) location.hash = provaId ? "#/questoes?provaId=" + encodeURIComponent(provaId) : "#/questoes";
   });
   r.addEventListener("submit", async ev => {
@@ -3691,7 +3763,7 @@ var mfVNovaProva = { render: async function (r) {
       meta = { selecao, instituicao: inst, nome: f.nome.value.trim(), ...(aut ? { turma: turmaNorm(ano), ano: Number(ano.slice(0, 4)) } : { ano: Number(ano) }) };
       try {
         const fa = (await ge("listarQuestoes", { facetas: !0, tamanho: 1 })).facetas.provas.find(p => p.instituicao === inst && (p.selecao || "") === selecao && (aut ? p.turma === meta.turma : p.ano === meta.ano && !p.turma));
-        if (fa) { provaId = fa.id; numero = await proximoNumero(fa.id); meta.existente = !0; } else { provaId = ""; numero = 1; }
+        if (fa) { provaId = fa.id; meta.existente = !0; await carregarQuestoes(); } else { provaId = ""; numero = 1; questoesProva = []; }
       } catch (x) { be(x.message, "erro"); }
       return desenhar();
     }
@@ -3728,18 +3800,22 @@ var mfVNovaProva = { render: async function (r) {
       provaId = res.provaId || provaId; meta.existente = !0;
       const falhas = [];
       for (const up of res.paraUpload) { const m = lista.find(x => x.nome === up.arquivo); if (!m) continue; try { await mfUploadImgQuestao(up.questaoId, up.arquivo, m.file); } catch (x) { falhas.push(m.file.name); } }
-      const qid = res.paraUpload.length ? res.paraUpload[0].questaoId : (provaId + "-q" + ("000" + num).slice(-3));
-      salvas.push({ numero: num, foco: tax.foco, id: qid });
       ultimaTax = { area: tax.area, subarea: tax.subarea, foco: tax.foco };
       be(falhas.length ? `Questão salva, mas ${Gt(falhas.length, "foto não foi enviada", "fotos não foram enviadas")}: ${falhas.join(", ")}` : `Questão ${num} salva.`, falhas.length ? "erro" : "ok", falhas.length ? 8000 : 2500);
-      imgs.forEach(m => URL.revokeObjectURL(m.url)); imgs = []; numero = num + 1;
+      imgs.forEach(m => URL.revokeObjectURL(m.url)); imgs = [];
       ["#np-enun", "#np-com", "#np-resp", ...LETRAS.map(l => "#np-alt-" + l)].forEach(s => { r.querySelector(s).value = ""; });
-      r.querySelector("#np-anulada").checked = !1; r.querySelector("#np-num").value = numero; r.querySelector("#np-t2").textContent = "Questão " + numero;
-      r.querySelector("#np-lista").innerHTML = String(listaSalvas()); listaImgs(); jn(r);
+      r.querySelector("#np-anulada").checked = !1;
+      await atualizarLista(); listaImgs();
       r.querySelector("#np-enun").focus();
     } catch (x) { erro("#np-erro", x.message); }
     salvando = !1; const sb = r.querySelector("#np-salvar"); sb && (sb.disabled = !1);
   });
+  try {
+    const fac = (await ge("listarQuestoes", { facetas: !0, tamanho: 1 })).facetas.provas || [];
+    autorais = fac.filter(p => p.selecao === "Autoral");
+    const alvo = qy && qy.prova && fac.find(p => p.id === qy.prova);
+    if (alvo) { meta = { selecao: alvo.selecao, instituicao: alvo.instituicao, nome: "", ...(alvo.turma ? { turma: alvo.turma, ano: alvo.ano } : { ano: alvo.ano }), existente: !0 }; provaId = alvo.id; await carregarQuestoes(); }
+  } catch (x) { be(x.message, "erro"); }
   desenhar();
 } };
 
@@ -4150,7 +4226,7 @@ ${a}</section>
           <div class="min-w-[12rem] flex-1"><label class="label">Nome da prova <span class="muted font-normal">(${B.total} ${B.total===1?"quest\xE3o":"quest\xF5es"})</span></label><input name="inst" class="input" maxlength="120" value="${B.instituicao}" required ${mfAdmin()?"":ot("readonly")}></div>
           <div class="w-24"><label class="label">${B.turma?"Turma":"Ano"}</label><input name="ano" class="input" inputmode="numeric" maxlength="6" value="${mfAno(B)}" required ${mfAdmin()&&!B.turma?"":ot("readonly")}></div>
           <div class="w-40"><label class="label">Sele\xE7\xE3o</label><select class="input" data-selecao="${B.id}" ${mfAdmin()?"":ot("disabled")}><option value="">Sem sele\xE7\xE3o</option>${(u.facetas.selecoes||[]).map(x=>O`<option ${x===B.selecao?ot("selected"):""}>${x}</option>`)}</select></div>
-          ${mfAdmin()?O`<button type="submit" class="btn btn-outline">Salvar</button>`:""}
+          ${mfAdmin()&&B.selecao==="Autoral"?O`<a href="#/prova-nova?prova=${B.id}" class="btn btn-outline">Gerenciar questões</a>`:""}${mfAdmin()?O`<button type="submit" class="btn btn-outline">Salvar</button>`:""}
           <button type="button" class="btn btn-ghost px-2 text-rose-700 dark:text-rose-400" data-excluir-prova="${B.id}" data-nome="${B.instituicao} ${mfAno(B)}${B.rotulo?" \xB7 "+B.rotulo:""}" aria-label="Excluir a prova ${B.instituicao} ${mfAno(B)}${B.rotulo?" \xB7 "+B.rotulo:""}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
         </form>`)}`:O`<p class="muted text-sm">Nenhuma prova importada ainda.</p>`),jn()}catch(u){i.innerHTML=String(O`<p class="text-sm text-rose-600">${u.message}</p>`)}}i.addEventListener("change",async u=>{let l=u.target.closest("[data-selecao]");if(!l)return;try{await ge("definirSelecao",{provaId:l.dataset.selecao,selecao:l.value}),be("Sele\xE7\xE3o salva.","ok",1800)}catch(B){be(B.message,"erro")}}),i.addEventListener("click",u=>{let l=u.target.closest("[data-excluir-prova]");l&&mfExcluirProva(l.dataset.excluirProva,l.dataset.nome,a)}),i.addEventListener("submit",async u=>{u.preventDefault();let l=u.target,B=l.querySelector("button");B.disabled=!0;try{let d=await ge("renomearProva",{provaId:l.dataset.prova,instituicao:l.inst.value.trim(),ano:/^\d{4}$/.test(l.ano.value)?Number(l.ano.value):void 0});be(`Prova renomeada em ${d.questoes} ${d.questoes===1?"quest\xE3o":"quest\xF5es"}.`,"ok"),await a()}catch(d){be(d.message,"erro",6e3),B.disabled=!1}}),a(),r.querySelector("#p-tema").value=e.tema||"auto";async function o(u){try{Ee.prefs=await ge("salvarPrefs",{prefs:u}),Ys(),be("Prefer\xEAncia salva.","ok",1800)}catch(l){be(l.message,"erro")}}r.querySelector("#p-foco").addEventListener("change",u=>o({ocultarFoco:u.target.checked})),r.querySelector("#p-area").addEventListener("change",u=>o({ocultarArea:u.target.checked})),r.querySelector("#p-tema").addEventListener("change",u=>o({tema:u.target.value})),r.querySelector("#p-fonte").addEventListener("change",u=>o({fonte:u.target.value})),r.querySelector("#b-sair").addEventListener("click",()=>{Ki(),location.hash="#/login",location.reload()})}crypto.randomUUID||(crypto.randomUUID=()=>("10000000-1000-4000-8000"+-1e11).replace(/[018]/g,r=>(r^crypto.getRandomValues(new Uint8Array(1))[0]&15>>r/4).toString(16)));Jv();document.addEventListener("bq:erro-nuvem",r=>be("Falha ao salvar na nuvem: "+(r.detail&&r.detail.message||"verifique as regras do Firestore e a conex\xE3o."),"erro",8e3));var ZA={"mf/reclass":mfVReclass,"mf/provanova":mfVNovaProva,"mf/aulas":mfVAulas,"mf/caderno":mfVCaderno,"mf/tax":mfVTax,"./views/login.js":Pg,"./views/dashboard.js":Fg,"./views/questoes.js":Lg,"./views/player.js":Gg,"./views/trilhas.js":qg,"./views/simulados.js":Hg,"./views/relatorio.js":Ug,"./views/importar.js":$g,"./views/ajustes.js":Jg},e1=[{re:/^\/login$/,mod:"./views/login.js",publica:!0,nav:null},{re:/^\/$/,mod:"./views/dashboard.js",nav:"inicio"},{re:/^\/questoes$/,mod:"./views/questoes.js",nav:"questoes"},{re:/^\/favoritas$/,mod:"./views/questoes.js",nav:"favoritas",opcoes:{modo:"favoritas"}},{re:/^\/q\/([^/]+)$/,mod:"./views/player.js",nav:"questoes",player:!0,params:["id"]},{re:/^\/sessao\/([^/]+)$/,mod:"./views/player.js",nav:"simulados",player:!0,params:["sessaoId"]},{re:/^\/trilhas$/,mod:"./views/trilhas.js",nav:"trilhas"},{re:/^\/simulados$/,mod:"./views/simulados.js",nav:"simulados"},{re:/^\/relatorio\/([^/]+)$/,mod:"./views/relatorio.js",nav:"simulados",params:["sessaoId"]},{re:/^\/importar$/,mod:"./views/importar.js",nav:"importar"},{re:/^\/ajustes$/,mod:"./views/ajustes.js",nav:"ajustes"},{re:/^\/aulas$/,mod:"mf/aulas",nav:"aulas"},{re:/^\/caderno$/,mod:"mf/caderno",nav:"focos"},{re:/^\/reclassificar$/,mod:"mf/reclass",nav:"ajustes"},{re:/^\/prova-nova$/,mod:"mf/provanova",nav:"importar"},{re:/^\/taxonomia$/,mod:"mf/tax",nav:"ajustes"}],nw=[{id:"inicio",href:"#/",icone:"layout-dashboard",rotulo:"In\xEDcio"},{id:"questoes",href:"#/questoes",icone:"list-checks",rotulo:"Quest\xF5es"},{id:"trilhas",href:"#/trilhas",icone:"route",rotulo:"Trilhas"},{id:"simulados",href:"#/simulados",icone:"timer",rotulo:"Simulados"},{id:"aulas",href:"#/aulas",icone:"graduation-cap",rotulo:"Aulas"},{id:"focos",href:"#/caderno",icone:"bookmark",rotulo:"Focos"},{id:"favoritas",href:"#/favoritas",icone:"heart",rotulo:"Favoritas"}],WB=null,cc=0;function t1(){let r=location.hash.replace(/^#/,"")||"/",[e,t]=r.split("?");return{caminho:decodeURI(e)||"/",query:Object.fromEntries(new URLSearchParams(t||""))}}function lc(r){location.hash=r}function YB(){let r=!!Ee.usuario;document.getElementById("shell").innerHTML=String(O`
   <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
