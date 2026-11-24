@@ -77,6 +77,8 @@
     body[data-rota="player"]::before { content: ""; position: fixed; inset: 0 0 auto 0; height: 70vh; z-index: -1; pointer-events: none;
       background: linear-gradient(180deg, var(--g1, #D3E4F7) 0%, color-mix(in srgb, var(--g1, #D3E4F7) 45%, white) 48%, rgb(255 255 255 / 0) 100%); transition: background .4s; }
     .dark body[data-rota="player"]::before { background: linear-gradient(180deg, color-mix(in srgb, var(--g1, #D3E4F7) 20%, #0f172a) 0%, rgb(15 23 42 / 0) 100%); }
+    .mf-chev { transition: transform .15s; }
+    details[data-k][open] > summary .mf-chev { transform: rotate(90deg); }
     /* Ajustes só para telas de celular (o desktop não muda). */
     @media (max-width: 639px) {
       .grid > * { min-width: 0; }
@@ -93,10 +95,10 @@
       dialog.mf-player [data-aula-box] > iframe:not(.aspect-video) { flex: 1 1 auto; height: auto; min-height: 55dvh; }
       details[data-k] > summary { list-style: none; }
       details[data-k] > summary::-webkit-details-marker { display: none; }
-      details[data-k] > summary::before { content: "›"; flex: none; display: inline-block; width: .9rem; margin-right: .35rem; text-align: center; font-weight: 700; color: #94a3b8; transition: transform .15s; }
-      details[data-k][open] > summary::before { transform: rotate(90deg); }
+      details[data-k]:not(.mf-ic) > summary::before { content: "›"; flex: none; display: inline-block; width: .9rem; margin-right: .35rem; text-align: center; font-weight: 700; color: #94a3b8; transition: transform .15s; }
+      details[data-k]:not(.mf-ic)[open] > summary::before { transform: rotate(90deg); }
       details[data-k] > summary:not(.flex) { display: flex; align-items: center; gap: .25rem; }
-      details[data-k] > summary > :first-child { margin-right: auto; flex: 1 1 12rem; min-width: 0; }
+      details[data-k]:not(.mf-ic) > summary > :first-child { margin-right: auto; flex: 1 1 12rem; min-width: 0; }
       details[data-k] > summary > h2, details[data-k] > summary > h3 { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
     }
     .chip { display: inline-flex; align-items: center; gap: .375rem; border-radius: 9999px; padding: .25rem .75rem; font-size: .75rem; font-weight: 600; line-height: 1.1rem; background: var(--bg); color: var(--fg); white-space: nowrap; }
@@ -769,13 +771,17 @@ function aplicarFiltro_(u, filtro) {
   var idx = indice_(), est = estadoUsuario_(u);
   var anos = lista_(filtro.ano).map(Number), insts = lista_(filtro.instituicao), provas = lista_(filtro.provaId);
   var areas = lista_(filtro.area), subs = lista_(filtro.subarea), focos = lista_(filtro.foco), st = lista_(filtro.status);
-  var sels = lista_(filtro.selecao).map(normSelecao_).filter(Boolean), mapaSel = sels.length ? selecaoDasProvas_() : null;
+  var sels = lista_(filtro.selecao).map(normSelecao_).filter(Boolean), semAutoral = sels.indexOf('Autoral') < 0, mapaSel = sels.length || semAutoral ? selecaoDasProvas_() : null;
   var out = [];
   for (var i = 0; i < idx.length; i++) {
     var q = idx[i], id = q[I_ID];
     if (q[I_ANUL] && !filtro.incluirAnuladas) continue;
     if (provas.length && provas.indexOf(q[I_PROVA]) < 0) continue;
-    if (mapaSel && sels.indexOf((mapaSel[q[I_PROVA]] || {}).selecao) < 0) continue;
+    if (mapaSel) {
+      var sp = (mapaSel[q[I_PROVA]] || {}).selecao;
+      if (sels.length && sels.indexOf(sp) < 0) continue;
+      if (semAutoral && sp === 'Autoral' && provas.indexOf(q[I_PROVA]) < 0) continue;
+    }
     if (insts.length && insts.indexOf(q[I_INST]) < 0) continue;
     if (anos.length && anos.indexOf(q[I_ANO]) < 0) continue;
     if (areas.length && areas.indexOf(q[I_AREA]) < 0) continue;
@@ -805,9 +811,9 @@ function ordenar_(lista, ordem) {
 }
 
 function facetas_() {
-  var provas = {}, areas = {}, selP = selecaoDasProvas_(), rotP = rotulosSelecao_();
+  var provas = {}, areas = {}, selP = selecaoDasProvas_(), rotP = rotulosSelecao_(), turP = turmasSalvas_();
   indice_().forEach(function (q) {
-    var p = provas[q[I_PROVA]] || (provas[q[I_PROVA]] = { id: q[I_PROVA], instituicao: q[I_INST], ano: q[I_ANO], total: 0, selecao: (selP[q[I_PROVA]] || {}).selecao || '', rotulo: rotP[q[I_PROVA]] || '' });
+    var p = provas[q[I_PROVA]] || (provas[q[I_PROVA]] = { id: q[I_PROVA], instituicao: q[I_INST], ano: q[I_ANO], total: 0, selecao: (selP[q[I_PROVA]] || {}).selecao || '', rotulo: rotP[q[I_PROVA]] || '', turma: turP[q[I_PROVA]] || '' });
     p.total++;
     areas[q[I_AREA]] = (areas[q[I_AREA]] || 0) + 1;
   });
@@ -829,11 +835,11 @@ function listarQuestoes_(u, p) {
   var tam = Math.min(Math.max(Number(p.tamanho) || 50, 1), 200), pag = Math.max(Number(p.pagina) || 1, 1), est = estadoUsuario_(u);
   res.pagina = pag;
   res.tamanho = tam;
-  var rotL = rotulosSelecao_();
+  var rotL = rotulosSelecao_(), turL = turmasSalvas_();
   res.itens = lista.slice((pag - 1) * tam, pag * tam).map(function (q) {
     var id = q[I_ID], r = est.r[id];
     return {
-      id: id, provaId: q[I_PROVA], selecaoRotulo: rotL[q[I_PROVA]] || '', instituicao: q[I_INST], ano: q[I_ANO], numero: q[I_NUM],
+      id: id, provaId: q[I_PROVA], selecaoRotulo: rotL[q[I_PROVA]] || '', turma: turL[q[I_PROVA]] || '', instituicao: q[I_INST], ano: q[I_ANO], numero: q[I_NUM],
       area: q[I_AREA], subarea: q[I_SUB], foco: q[I_FOCO], anulada: !!q[I_ANUL],
       status: r ? (r[1] === 1 ? 'certa' : r[1] === 0 ? 'errada' : 'anulada') : 'nova',
       favorita: !!est.f[id], revisar: !!est.v[id]
@@ -855,7 +861,7 @@ function buscarQuestoes_(u, p) {
   if (ids.length > MAX_IDS_BUSCA) throw erro_('No máximo ' + MAX_IDS_BUSCA + ' questões por chamada.');
   var ses = p.contextoId ? sessao_(u, String(p.contextoId)) : null;
   var bloqueado = !!(ses && ses.config.modo === 'prova' && !ses.fim);
-  var est = estadoUsuario_(u), notas = notasUsuario_(u, ids), qs = questoes_(ids), itens = [], rotB = rotulosSelecao_();
+  var est = estadoUsuario_(u), notas = notasUsuario_(u, ids), qs = questoes_(ids), itens = [], rotB = rotulosSelecao_(), turB = turmasSalvas_();
   qs.forEach(function (q) {
     if (!q) return;
     var r = est.r[q.id];
@@ -869,6 +875,7 @@ function buscarQuestoes_(u, p) {
     }
     o.revelado = revelar;
     o.selecaoRotulo = rotB[q.provaId] || '';
+    o.turma = turB[q.provaId] || '';
     o.estado = {
       marcada: r ? r[0] : null, correta: r ? (r[1] === 2 ? null : r[1] === 1) : null, tentativas: r ? r[2] : 0,
       favorita: !!est.f[q.id], revisar: !!est.v[q.id], nota: notas[q.id] ? notas[q.id].texto : ''
@@ -1423,12 +1430,16 @@ function linhaDeQuestao_(o) {
  */
 function importarLote_(u, p) {
   var pv = p.prova || {}, qs = p.questoes;
-  var inst = str_(pv.instituicao), ano = Number(pv.ano);
+  var inst = str_(pv.instituicao), turma = str_(pv.turma) ? normTurma_(pv.turma) : '', ano = Number(pv.ano);
   if (!inst) throw erro_('prova.instituicao é obrigatório.');
+  if (str_(pv.turma) && !turma) throw erro_('prova.turma inválida. Use ano + semestre, como 2023B.');
+  if (normSelecao_(pv.selecao) === 'Autoral' && !turma) throw erro_('prova.turma é obrigatória na prova Autoral (ex.: 2023B).');
+  if (turma && normSelecao_(pv.selecao) !== 'Autoral') throw erro_('prova.turma só vale para a seleção Autoral.');
+  if (turma) ano = Number(turma.slice(0, 4));
   if (!isFinite(ano) || Math.floor(ano) !== ano || ano < 1950 || ano > 2100) throw erro_('prova.ano inválido.');
   if (!Array.isArray(qs) || !qs.length) throw erro_('Nenhuma questão no lote.');
   if (qs.length > MAX_LOTE) throw erro_('Envie no máximo ' + MAX_LOTE + ' questões por chamada.');
-  var prova = { instituicao: inst, ano: ano, id: str_(pv.id) || slug_(inst + ' ' + ano), nome: str_(pv.nome) || (inst + ' ' + ano) };
+  var prova = { instituicao: inst, ano: ano, id: str_(pv.id) || slug_(inst + ' ' + (turma || ano)), nome: str_(pv.nome) || (inst + ' ' + (turma || ano)) };
   if (!/^[A-Za-z0-9._-]{1,80}$/.test(prova.id)) throw erro_('prova.id inválido.');
   var offset = Number(p.offset) || 0, selIn = normSelecao_(pv.selecao);
   var res = { importadas: 0, duplicadas: [], erros: [], avisos: [], paraUpload: [], focosNovos: [] };
@@ -1479,12 +1490,15 @@ function importarLote_(u, p) {
       invalidarCache_();
     }
     if (selIn) { var ms = selecoesSalvas_(); if (ms[prova.id] !== selIn) { ms[prova.id] = selIn; upsertConfig_('selecoes', JSON.stringify(ms)); } }
+    res.provaId = prova.id;
+    if (turma) { var mt = turmasSalvas_(); if (mt[prova.id] !== turma) { mt[prova.id] = turma; upsertConfig_('turmas', JSON.stringify(mt)); } }
   });
   return res;
 }
 
 /** payload: { provaId, instituicao, ano? } — troca o nome (e/ou ano) da prova em TODAS as questões dela. O id das questões não muda, então histórico e favoritos continuam. */
 function renomearProva_(u, p) {
+  exigirAdmin_(u);
   var provaId = str_(p.provaId), inst = str_(p.instituicao).trim();
   if (!provaId) throw erro_('Informe a prova.');
   if (!inst) throw erro_('Informe o novo nome da prova.');
@@ -1584,8 +1598,8 @@ function acrescentarTax_(lista) {
 
 // ───────────────────────────── Seleção da prova (R1, R+, Prova de Título) ─────────────────────────────
 
-var SELECOES = ['R1', 'R+', 'Prova de Título'];
-var SUFIXO_SEL = { 'R1': 'r1', 'R+': 'rmais', 'Prova de Título': 'titulo' };
+var SELECOES = ['R1', 'R+', 'Prova de Título', 'Autoral'];
+var SUFIXO_SEL = { 'R1': 'r1', 'R+': 'rmais', 'Prova de Título': 'titulo', 'Autoral': 'autoral' };
 
 function selecoesSalvas_() {
   var d = lerTudo_('Config');
@@ -1599,7 +1613,20 @@ function normSelecao_(x) {
   if (t === 'r1') return 'R1';
   if (t === 'r+' || t === 'rmais') return 'R+';
   if (t.indexOf('titulo') >= 0) return 'Prova de Título';
+  if (t === 'autoral') return 'Autoral';
   return '';
+}
+
+/** Turma = ano + semestre de entrada (ex.: 2023B). Aceita 2023B, 2023-b, 2023.2 (1=A, 2=B). */
+function normTurma_(x) {
+  var m = /^\\s*((?:19|20)\\d{2})\\s*[-.\\/]?\\s*([ABab12])\\s*$/.exec(String(x === undefined || x === null ? '' : x));
+  return m ? m[1] + ({ '1': 'A', '2': 'B' }[m[2]] || m[2].toUpperCase()) : '';
+}
+
+function turmasSalvas_() {
+  var d = lerTudo_('Config');
+  for (var i = 0; i < d.length; i++) if (String(d[i][0]) === 'turmas') return jsonOr_(d[i][1], {}) || {};
+  return {};
 }
 
 /** Sugere a seleção pelo nome/id da prova (…R+, …R1, …Título). */
@@ -1633,14 +1660,15 @@ function rotulosSelecao_() {
     chave[id] = slug_(q[I_INST]) + '|' + q[I_ANO];
     cont[chave[id]] = (cont[chave[id]] || 0) + 1;
   });
-  Object.keys(chave).forEach(function (id) { out[id] = cont[chave[id]] > 1 ? ((sel[id] || {}).selecao || '') : ''; });
+  Object.keys(chave).forEach(function (id) { var sp = (sel[id] || {}).selecao || ''; out[id] = sp === 'Autoral' ? 'Autoral' : (cont[chave[id]] > 1 ? sp : ''); });
   return out;
 }
 
 function definirSelecao_(u, p) {
+  exigirAdmin_(u);
   var provaId = str_(p.provaId), bruto = str_(p.selecao), sel = bruto ? normSelecao_(bruto) : '';
   if (!provaId) throw erro_('Informe a prova.');
-  if (bruto && !sel) throw erro_('Seleção inválida. Use R1, R+ ou Prova de Título.');
+  if (bruto && !sel) throw erro_('Seleção inválida. Use R1, R+, Prova de Título ou Autoral.');
   return comLock_(function () {
     var m = selecoesSalvas_();
     m[provaId] = sel;
@@ -2094,6 +2122,7 @@ function taxonomiaUso_(u) {
 }
 
 function taxAdicionarFoco_(u, p) {
+  exigirAdmin_(u);
   var foco = str_(p.foco).slice(0, 120);
   if (!foco) throw erro_('Informe o nome do foco.');
   return comLock_(function () {
@@ -2146,15 +2175,16 @@ function taxRenomearFoco_(u, p) {
     var t = JSON.parse(JSON.stringify(tax_())), s = subareaTax_(t, area, sub), i = s.focos.indexOf(de);
     if (i < 0) throw erro_('Foco não encontrado.');
     if (de === para) return { taxonomia: t, questoes: 0 };
-    if (s.focos.indexOf(para) >= 0) throw erro_('Já existe um foco com esse nome nessa subárea.');
-    s.focos[i] = para;
+    var existe = s.focos.indexOf(para) >= 0;
+    if (existe && p.mesclar !== true) throw erro_('Já existe um foco com esse nome nessa subárea.');
+    if (existe) s.focos.splice(i, 1); else s.focos[i] = para;
     salvarTax_(t);
     var q = trocarFoco_('Questoes', 5, area, sub, de, para);
     trocarFoco_('Aulas', 3, area, sub, de, para);
     trocarFoco_('Caderno', 3, area, sub, de, para);
     trocarFoco_('Subfocos', 1, area, sub, de, para);
     esquecerQuestoes_(q);
-    return { taxonomia: tax_(), questoes: q.length };
+    return { taxonomia: tax_(), questoes: q.length, mesclado: existe };
   });
 }
 
@@ -2175,6 +2205,7 @@ function taxRemoverFoco_(u, p) {
 }
 
 function recategorizarQuestao_(u, p) {
+  exigirAdmin_(u);
   var id = str_(p.id), area = str_(p.area), sub = str_(p.subarea), foco = str_(p.foco);
   var e = erroTaxonomia_(area, sub, foco);
   if (e) throw erro_(e);
@@ -2435,18 +2466,18 @@ var mfVTax = { render: async function (r) {
     r.innerHTML = String(O`
     <h1 class="h1">Focos e classificação</h1>
 
-    <div class="mt-4">${mfBotoesExportar()}</div>
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-2">${mfBotoesExportar()}<span class="flex flex-wrap items-center gap-2"><a href="#/reclassificar" class="btn btn-outline btn-sm"><i data-lucide="list-checks" class="h-4 w-4" aria-hidden="true"></i>Reclassificar</a>${mfBotoesSecoes()}</span></div>
     <div class="mt-4"><label class="label" for="t-busca">Buscar foco</label><input id="t-busca" class="input" type="search" value="${busca}" placeholder="Ex.: Asma"></div>
     <div class="mt-5 space-y-4">${dados.taxonomia.areas.map(a => O`
-      <details class="card" ${b ? ot("open") : ""}>
-        <summary class="flex cursor-pointer flex-wrap items-center justify-between gap-2"><span class="flex min-w-0 flex-wrap items-center gap-2">${Vt(a.nome)}<span class="muted text-xs">${Gt(a.subareas.length, "subárea", "subáreas")}</span></span>
+      <details class="card mf-ic" data-k="ta|${a.nome}" ${b ? ot("open") : mfAberto("ta|" + a.nome, false)}>
+        <summary class="flex cursor-pointer flex-wrap items-center justify-between gap-2"><span class="flex min-w-0 flex-wrap items-center gap-2">${mfChev}${Vt(a.nome)}<span class="muted text-xs">${Gt(a.subareas.length, "subárea", "subáreas")}</span></span>
           <button type="button" class="btn btn-ghost btn-sm shrink-0" data-nova-sub="${a.nome}"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Subárea</button></summary>
         <div class="mt-4 space-y-4">${a.subareas.map(s => {
           let nid = "nf-" + ++uid;
           let focos = s.focos.filter(f => !b || f.toLowerCase().includes(b) || s.nome.toLowerCase().includes(b));
           if (b && !focos.length) return "";
-          return O`<section class="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-            <h3 class="text-sm font-semibold">${s.nome}</h3>
+          return O`<details class="mf-ic rounded-xl border border-slate-200 p-3 dark:border-slate-800" data-k="ts|${a.nome}|${s.nome}" ${b ? ot("open") : mfAberto("ts|" + a.nome + "|" + s.nome, false)}>
+            <summary class="flex cursor-pointer items-center gap-1.5 text-sm font-semibold">${mfChev}<span class="min-w-0 flex-1">${s.nome}</span><span class="muted shrink-0 text-xs font-normal">${Gt(focos.length, "foco", "focos")}</span></summary>
             <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">${focos.map(f => {
               let nq = uso(a.nome, s.nome, f);
               return O`<li class="flex items-center gap-2 py-1.5 text-sm"><span class="min-w-0 flex-1">${f}</span><span class="muted shrink-0 text-xs tabular-nums">${nq} ${nq === 1 ? "questão" : "questões"}</span>
@@ -2454,7 +2485,7 @@ var mfVTax = { render: async function (r) {
                 <button type="button" class="btn btn-ghost btn-sm px-2" data-remover data-a="${a.nome}" data-s="${s.nome}" data-f="${f}" aria-label="Remover foco ${f}" title="${nq ? "Em uso: renomeie ou recategorize antes" : "Remover"}" ${nq ? ot("disabled") : ""}><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button></li>`;
             })}</ul>
             <form class="mt-2 flex gap-2" data-novo-foco data-a="${a.nome}" data-s="${s.nome}"><label class="sr-only" for="${nid}">Novo foco em ${s.nome}</label><input id="${nid}" name="foco" class="input py-1.5" maxlength="120" placeholder="Novo foco" required><button class="btn btn-outline btn-sm shrink-0" type="submit">Adicionar</button></form>
-          </section>`;
+          </details>`;
         })}</div>
       </details>`)}</div>`);
     jn(r);
@@ -2479,7 +2510,10 @@ var mfVTax = { render: async function (r) {
     ev.preventDefault();
     aplicar("taxAdicionarFoco", { area: fm.dataset.a, subarea: fm.dataset.s, foco: fm.foco.value }, "Foco adicionado.");
   });
+  mfLigarSecoes(r);
   r.addEventListener("click", async ev => {
+    let ba = ev.target.closest("[data-abrir-todos]");
+    if (ba) return mfAbrirTodos(r, ba.dataset.abrirTodos === "1");
     let b = ev.target.closest("[data-renomear],[data-remover],[data-nova-sub]");
     if (!b) return;
     ev.preventDefault();
@@ -2489,8 +2523,13 @@ var mfVTax = { render: async function (r) {
     }
     let { a, s, f } = b.dataset;
     if (b.dataset.renomear !== void 0) {
-      return pn({ titulo: "Renomear foco", corpo: O`<div><label class="label" for="m-nome">Novo nome</label><input id="m-nome" name="para" class="input" maxlength="120" value="${f}" required></div><p class="muted text-xs">${a} › ${s}. As questões e flashcards deste foco passam a usar o novo nome.</p>`, confirmar: "Renomear",
-        onSubmit: async v => { let res = await ge("taxRenomearFoco", { area: a, subarea: s, de: f, para: v.para }); dados = await ge("taxonomiaUso"); be(`Foco renomeado (${Gt(res.questoes, "questão atualizada", "questões atualizadas")}).`, "ok", 5e3); desenhar(); } });
+      return pn({ titulo: "Renomear foco", corpo: O`<div><label class="label" for="m-nome">Novo nome</label><input id="m-nome" name="para" class="input" maxlength="120" value="${f}" required></div><p class="muted text-xs">${a} › ${s}. As questões, aulas e anotações deste foco passam a usar o novo nome. Se já existir um foco com esse nome, os dois são mesclados.</p>`, confirmar: "Renomear",
+        onSubmit: async v => {
+          let para = v.para.trim(), sub = mfSubareas(a).find(x => x.nome === s), mesclar = !!(sub && para !== f && sub.focos.includes(para));
+          if (mesclar && !await Ac(`Já existe o foco “${para}” em ${a} › ${s}. Mesclar “${f}” nele? Todas as questões, aulas e anotações de “${f}” passam para “${para}”, e “${f}” deixa de existir. Não dá para desfazer.`, { confirmar: "Mesclar", perigo: !0, titulo: "Mesclar focos" })) throw new Error("Mesclagem cancelada.");
+          let res = await ge("taxRenomearFoco", { area: a, subarea: s, de: f, para, mesclar }); dados = await ge("taxonomiaUso");
+          be(res.mesclado ? `Focos mesclados (${Gt(res.questoes, "questão movida", "questões movidas")}).` : `Foco renomeado (${Gt(res.questoes, "questão atualizada", "questões atualizadas")}).`, "ok", 5e3); desenhar();
+        } });
     }
     if (b.dataset.remover !== void 0 && await Ac(`Remover o foco “${f}” de ${a} › ${s}?`, { confirmar: "Remover", perigo: !0, titulo: "Remover foco" })) aplicar("taxRemoverFoco", { area: a, subarea: s, foco: f }, "Foco removido.");
   });
@@ -2523,7 +2562,7 @@ async function mfEditarQuestao(id, aposSalvar) {
   let q;
   try { q = await ge("questaoCompleta", { id }); } catch (x) { return be(x.message, "erro"); }
   let disc = !(q.alternativas || []).length;
-  await mfModalTax({ titulo: `Editar questão ${q.numero} · ${q.instituicao} ${q.ano}`, largo: !0, confirmar: "Salvar", corpo: mfCamposQuestao(q), onSubmit: async v => {
+  await mfModalTax({ titulo: `Editar questão ${q.numero} · ${q.instituicao} ${mfAno(q)}`, largo: !0, confirmar: "Salvar", corpo: mfCamposQuestao(q), onSubmit: async v => {
     v = await mfResolverFoco(v);
     let alternativas = [], pulou = !1;
     if (!disc) {
@@ -2579,7 +2618,7 @@ async function mfExportarFocos(formato) {
   }
   be("Arquivo gerado.", "ok", 2500);
 }
-function mfLigarExportacao(raiz) { raiz.addEventListener("click", e => { if (e.target.closest("[data-exportar-banco]")) return mfExportarBanco(); let b = e.target.closest("[data-exportar]"); b && mfExportarFocos(b.dataset.exportar); }); }
+function mfLigarExportacao(raiz) { raiz.addEventListener("click", e => { let pb = e.target.closest("[data-exportar-provas]"); if (pb) return mfExportarProvas(pb.dataset.exportarProvas); if (e.target.closest("[data-exportar-banco]")) return mfExportarBanco(); let b = e.target.closest("[data-exportar]"); b && mfExportarFocos(b.dataset.exportar); }); }
 /** Gera um .zip com um JSON por prova e as imagens em imagens/ (formato do importador). Só usuário 02. */
 async function mfExportarBanco() {
   if (!mfAdmin()) return be("Somente o usuário 02 pode exportar o banco.", "erro");
@@ -2761,7 +2800,7 @@ async function mfMontarImpressao({ filtro, qtd, ordem, conteudo }) {
   let itens = [];
   for (let i = 0; i < ids.length; i += 50) itens.push(...(await ge("buscarQuestao", { ids: ids.slice(i, i + 50), revelar: !0 })).itens);
   let imgs = (q, pos) => Tc((q.imagens || []).filter(m => m.posicao === pos));
-  let rotulo = q => `${q.instituicao} ${q.ano}${q.selecaoRotulo ? " · " + q.selecaoRotulo : ""} · Questão ${q.numero}`;
+  let rotulo = q => `${q.instituicao} ${mfAno(q)}${q.selecaoRotulo ? " · " + q.selecaoRotulo : ""} · Questão ${q.numero}`;
   let disc = q => !(q.alternativas || []).length;
   let gab = q => q.anulada ? "Anulada" : (q.gabarito || "—");
   let mesma = new Set(itens.map(q => q.provaId)).size === 1;
@@ -2875,7 +2914,7 @@ async function mfImprimirQuadro(html) {
 }
 
 function mfTituloFiltro(a, provas, favoritas) {
-  let p = (a.provaId || []).map(id => { let x = provas.find(y => y.id === id); return x ? `${x.instituicao} ${x.ano}${x.rotulo ? " · " + x.rotulo : ""}` : id; });
+  let p = (a.provaId || []).map(id => { let x = provas.find(y => y.id === id); return x ? `${x.instituicao} ${mfAno(x)}${x.rotulo ? " · " + x.rotulo : ""}` : id; });
   let partes = [];
   p.length && partes.push(p.join(" + "));
   a.selecao.length && partes.push(a.selecao.join(" + "));
@@ -3374,6 +3413,261 @@ var mfVAulas = { render: async function (r, { query: qy }) {
   await carregar();
 } };
 
+// ───────────────────────── Provas: turma, exportação, reclassificação e prova do zero ─────────────────────────
+var mfChev = O`<i data-lucide="chevron-right" class="mf-chev h-4 w-4 shrink-0 text-slate-400" aria-hidden="true"></i>`;
+/** Ano da prova, ou a turma (ex.: 2023B) nas provas Autorais. */
+function mfAno(x) { return (x && (x.turma || x.ano)) || ""; }
+
+async function mfExportarProvas(formato) {
+  let u; try { u = await ge("listarQuestoes", { facetas: true, tamanho: 1 }); } catch (x) { return be(x.message, "erro"); }
+  const provas = ((u.facetas || {}).provas || []).slice();
+  if (!provas.length) return be("Nenhuma prova no banco.", "erro");
+  const ordem = ["R1", "R+", "Prova de Título", "Autoral", ""];
+  provas.sort((a, b) => ordem.indexOf(a.selecao || "") - ordem.indexOf(b.selecao || "") || a.instituicao.localeCompare(b.instituicao, "pt-BR") || String(mfAno(b)).localeCompare(String(mfAno(a)), "pt-BR", { numeric: true }));
+  const linhas = provas.map(p => ({ selecao: p.selecao || "", nome_completo: p.instituicao, ano: p.turma ? "" : p.ano, turma: p.turma || "", questoes: p.total, id: p.id }));
+  if (formato === "copiar") return mfCopiar(linhas.map(l => [l.selecao, l.nome_completo, l.turma || l.ano].join("\t")).join("\n"), `Lista de ${Gt(linhas.length, "prova", "provas")}`);
+  const data = new Date().toISOString().slice(0, 10);
+  if (formato === "json") mfBaixar(`provas-${data}.json`, JSON.stringify({ exportado_em: data, provas: linhas }, null, 2), "application/json");
+  else {
+    const cel = x => { x = String(x); return /[";\r\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+    const cab = ["Seleção", "Nome completo", "Ano", "Turma", "Questões", "Id"];
+    mfBaixar(`provas-${data}.csv`, "﻿" + [cab, ...linhas.map(l => [l.selecao, l.nome_completo, l.ano, l.turma, l.questoes, l.id])].map(l => l.map(cel).join(";")).join("\r\n") + "\r\n", "text/csv;charset=utf-8");
+  }
+  be("Arquivo gerado.", "ok", 2500);
+}
+function mfBotoesExportarProvas() {
+  return O`<div class="flex flex-wrap gap-2"><button type="button" class="btn btn-outline btn-sm" data-exportar-provas="csv"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar CSV</button><button type="button" class="btn btn-outline btn-sm" data-exportar-provas="json"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar JSON</button><button type="button" class="btn btn-outline btn-sm" data-exportar-provas="copiar"><i data-lucide="copy" class="h-4 w-4" aria-hidden="true"></i>Copiar lista</button></div>`;
+}
+
+/** Envia uma imagem de questão (comprime se o banco é o Firebase e manda em partes). */
+async function mfUploadImgQuestao(qid, nome, file) {
+  let buf = await file.arrayBuffer(), mime = file.type || "image/png";
+  if ((window.CONFIG || {}).FIREBASE) ({ buf, mime } = await YA(buf, mime));
+  const n = Math.max(1, Math.ceil(buf.byteLength / jg)), up = crypto.randomUUID().replace(/-/g, "");
+  for (let i = 0; i < n; i++) await ge("uploadImagem", { questaoId: qid, arquivo: nome, mime, dados: QA(buf.slice(i * jg, (i + 1) * jg)), parte: i, totalPartes: n, uploadId: up });
+}
+
+// ── Modo Reclassificação (só usuário 02) ──
+var mfVReclass = { render: async function (r, { query: qy }) {
+  if (!mfAdmin()) { r.innerHTML = String($n("tag", "Acesso restrito", "Somente o usuário 02 pode reclassificar questões.")); return; }
+  await mfAtualizarTax();
+  const u = await ge("listarQuestoes", { facetas: true, tamanho: 1 }), provas = ((u.facetas || {}).provas || []).slice().sort((a, b) => a.instituicao.localeCompare(b.instituicao, "pt-BR") || String(mfAno(b)).localeCompare(String(mfAno(a)), "pt-BR", { numeric: !0 }));
+  let f = { provaId: qy.provaId || "", area: qy.area || "" }, ids = [], i = 0, q = null, ab = { area: "", sub: "" }, auto = !0, movendo = !1;
+  const areasTax = () => (Ee.taxonomia || { areas: [] }).areas;
+  async function fila() {
+    const filtro = { incluirAnuladas: !0 }; f.provaId && (filtro.provaId = [f.provaId]); f.area && (filtro.area = [f.area]);
+    ids = (await ge("listarQuestoes", { filtro, apenasIds: !0, ordem: "prova" })).ids || []; i = 0; await mostrar();
+  }
+  async function mostrar() {
+    ab = { area: "", sub: "" }; q = null;
+    if (ids[i]) { const it = (await ge("buscarQuestao", { ids: [ids[i]], revelar: !0 })).itens[0]; q = it || null; }
+    desenhar();
+  }
+  function seletor() {
+    const tax = areasTax(), aA = tax.find(a => a.nome === ab.area), sA = aA && aA.subareas.find(s => s.nome === ab.sub);
+    return O`<div class="space-y-3">
+      <div class="flex flex-wrap gap-2" role="group" aria-label="Área">${tax.map(a => Vt(a.nome, { botao: !0, pressionado: ab.area === a.nome }))}</div>
+      ${aA ? O`<div class="flex flex-wrap gap-2" role="group" aria-label="Subárea">${aA.subareas.map(s => O`<button type="button" class="btn btn-outline btn-sm" data-sub="${s.nome}" aria-pressed="${ab.sub === s.nome}">${s.nome}</button>`)}</div>` : ""}
+      ${sA ? O`<ul class="divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-700">${sA.focos.map(fo => { const atual = q.area === ab.area && q.subarea === ab.sub && q.foco === fo; return O`<li><button type="button" class="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800" data-foco="${fo}" ${movendo ? ot("disabled") : ""}><span class="min-w-0">${fo}</span>${atual ? O`<span class="muted shrink-0 text-xs">atual</span>` : ""}</button></li>`; })}
+        <li class="p-2"><form class="flex gap-2" data-novo-foco><label class="sr-only" for="rc-novo">Novo foco</label><input id="rc-novo" name="foco" class="input py-1.5" maxlength="120" placeholder="Criar novo foco aqui" required><button class="btn btn-outline btn-sm shrink-0" type="submit">Criar e mover</button></form></li></ul>` : ""}
+    </div>`;
+  }
+  function desenhar() {
+    const opP = provas.map(p => O`<option value="${p.id}" ${p.id === f.provaId ? ot("selected") : ""}>${p.instituicao} ${mfAno(p)}${p.selecao ? " · " + p.selecao : ""}</option>`);
+    const opA = areasTax().map(a => O`<option ${a.nome === f.area ? ot("selected") : ""}>${a.nome}</option>`);
+    r.innerHTML = String(O`
+      <div class="flex flex-wrap items-end justify-between gap-3"><div><a href="#/taxonomia" class="btn btn-ghost btn-sm -ml-2"><i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>Focos e classificação</a><h1 class="h1 mt-1">Reclassificação</h1></div></div>
+      <div class="card mt-4 grid gap-3 sm:grid-cols-2">
+        <div><label class="label" for="rc-prova">Prova</label><select id="rc-prova" class="input"><option value="">Todas as provas (sem as Autorais)</option>${opP}</select></div>
+        <div><label class="label" for="rc-area">Área atual</label><select id="rc-area" class="input"><option value="">Qualquer área</option>${opA}</select></div>
+      </div>
+      ${q ? O`<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <p class="muted text-sm">Questão ${i + 1} de ${ids.length}</p>
+        <div class="flex items-center gap-3"><label class="flex items-center gap-2 text-sm"><input id="rc-auto" type="checkbox" class="h-4 w-4 accent-brand" ${auto ? ot("checked") : ""}>Avançar ao mover</label>
+          <button type="button" class="btn btn-outline btn-sm" id="rc-ant" ${i === 0 ? ot("disabled") : ""}><i data-lucide="chevron-left" class="h-4 w-4" aria-hidden="true"></i>Anterior</button>
+          <button type="button" class="btn btn-outline btn-sm" id="rc-prox" ${i >= ids.length - 1 ? ot("disabled") : ""}>Pular<i data-lucide="chevron-right" class="h-4 w-4" aria-hidden="true"></i></button></div></div>
+      <article class="card mt-3 space-y-4">
+        <header class="space-y-2"><p class="text-sm font-semibold">${q.instituicao} ${mfAno(q)}${q.selecaoRotulo ? " · " + q.selecaoRotulo : ""} · Questão ${q.numero}</p>${mfCaminho(q)}</header>
+        <div class="texto-questao text-[15px] leading-relaxed">${q.enunciado}</div>
+        ${Tc((q.imagens || []).filter(x => x.posicao === "enunciado"))}
+        ${(q.alternativas || []).length ? O`<ul class="space-y-1.5 text-sm">${q.alternativas.map(a => O`<li class="flex gap-2 ${a.letra === q.gabarito ? "font-semibold" : ""}"><span class="w-5 shrink-0">${a.letra})</span><span class="texto-questao min-w-0">${a.texto}</span></li>`)}</ul>` : ""}
+      </article>
+      <section class="card mt-3" aria-label="Escolha a nova classificação"><h2 class="h2 mb-3">Mover para…</h2>${seletor()}</section>` : $n("tag", "Nenhuma questão neste filtro", "Mude a prova ou a área.")}`);
+    jn(r);
+  }
+  async function mover(area, sub, foco) {
+    movendo = !0;
+    try {
+      await ge("recategorizarQuestao", { id: q.id, area, subarea: sub, foco });
+      be(`Movida para ${area} › ${sub} › ${foco}`, "ok", 2500);
+      if (auto && i < ids.length - 1) { i++; movendo = !1; return mostrar(); }
+      q.area = area; q.subarea = sub; q.foco = foco; ab = { area: "", sub: "" };
+    } catch (x) { be(x.message, "erro", 6000); }
+    movendo = !1; desenhar();
+  }
+  r.addEventListener("change", ev => {
+    if (ev.target.id === "rc-prova") { f.provaId = ev.target.value; fila(); }
+    else if (ev.target.id === "rc-area") { f.area = ev.target.value; fila(); }
+    else if (ev.target.id === "rc-auto") auto = ev.target.checked;
+  });
+  r.addEventListener("click", async ev => {
+    const t = ev.target; let b;
+    if (t.closest("#rc-ant") && i > 0) { i--; return mostrar(); }
+    if (t.closest("#rc-prox") && i < ids.length - 1) { i++; return mostrar(); }
+    if ((b = t.closest("[data-area]"))) { ab = ab.area === b.dataset.area ? { area: "", sub: "" } : { area: b.dataset.area, sub: "" }; return desenhar(); }
+    if ((b = t.closest("[data-sub]"))) { ab.sub = ab.sub === b.dataset.sub ? "" : b.dataset.sub; return desenhar(); }
+    if ((b = t.closest("[data-foco]")) && !movendo) return mover(ab.area, ab.sub, b.dataset.foco);
+  });
+  r.addEventListener("submit", async ev => {
+    const fm = ev.target.closest("[data-novo-foco]"); if (!fm) return;
+    ev.preventDefault();
+    const nome = fm.foco.value.trim(); if (!nome) return;
+    try { const res = await ge("taxAdicionarFoco", { area: ab.area, subarea: ab.sub, foco: nome }); res && res.taxonomia && (Ee.taxonomia = res.taxonomia); await mover(ab.area, ab.sub, nome); } catch (x) { be(x.message, "erro", 6000); }
+  });
+  r.innerHTML = String(Wi(3));
+  await fila();
+} };
+
+// ── Prova do zero (só usuário 02): cria a prova e as questões, com fotos, sem montar JSON ──
+var mfVNovaProva = { render: async function (r) {
+  if (!mfAdmin()) { r.innerHTML = String($n("tag", "Acesso restrito", "Somente o usuário 02 pode criar provas.")); return; }
+  await mfAtualizarTax();
+  const SEL = ["R1", "R+", "Prova de Título", "Autoral"], LETRAS = ["A", "B", "C", "D", "E"];
+  let meta = null, provaId = "", numero = 1, imgs = [], salvas = [], salvando = !1, ultimaTax = { area: Yr[0], subarea: "", foco: "" };
+  const turmaOk = t => /^(?:19|20)\d{2}\s*[-.\/]?\s*[ABab12]$/.test(t.trim());
+  const turmaNorm = t => { const m = /^((?:19|20)\d{2})\s*[-.\/]?\s*([ABab12])$/.exec(t.trim()); return m[1] + ({ 1: "A", 2: "B" }[m[2]] || m[2].toUpperCase()); };
+  const posOpcoes = () => [["enunciado", "No enunciado"], ["comentario", "Na resolução"], ...LETRAS.map(l => ["alternativa_" + l, "Na alternativa " + l])];
+  function formProva() {
+    const aut = (meta && meta.selecao === "Autoral") || (!meta);
+    return O`<section class="card" aria-labelledby="np-t1"><h2 id="np-t1" class="h2 mb-3">Prova</h2>
+      <form id="np-prova" class="grid gap-3 sm:grid-cols-2">
+        <div><label class="label" for="np-sel">Seleção</label><select id="np-sel" name="selecao" class="input">${SEL.map(s => O`<option ${s === (meta ? meta.selecao : "Autoral") ? ot("selected") : ""}>${s}</option>`)}</select></div>
+        <div><label class="label" for="np-inst" id="np-l-inst">${aut ? "Professor / nome da prova" : "Nome completo da prova"}</label><input id="np-inst" name="instituicao" class="input" maxlength="120" required value="${meta ? meta.instituicao : ""}"></div>
+        <div><label class="label" for="np-ano" id="np-l-ano">${aut ? "Turma (ano + semestre de entrada, ex.: 2023B)" : "Ano"}</label><input id="np-ano" name="ano" class="input" maxlength="6" required placeholder="${aut ? "2023B" : "2026"}" value="${meta ? (meta.turma || meta.ano) : ""}"></div>
+        <div><label class="label" for="np-nome">Nome (opcional)</label><input id="np-nome" name="nome" class="input" maxlength="120" value="${meta ? meta.nome || "" : ""}"></div>
+        <div class="sm:col-span-2"><p id="np-erro-p" class="hidden pb-2 text-sm font-medium text-rose-600" role="alert"></p><button class="btn btn-primary" type="submit">Começar a adicionar questões</button></div>
+      </form></section>`;
+  }
+  function resumoProva() {
+    return O`<section class="card flex flex-wrap items-center justify-between gap-3"><div class="min-w-0"><p class="text-sm font-semibold">${meta.instituicao} ${meta.turma || meta.ano} · ${meta.selecao}</p>${meta.existente ? O`<p class="muted text-xs">Prova já existente: as novas questões serão adicionadas a ela.</p>` : ""}</div>
+      <div class="flex gap-2">${salvas.length ? "" : O`<button type="button" class="btn btn-ghost btn-sm" id="np-alterar">Alterar</button>`}<button type="button" class="btn btn-outline btn-sm" id="np-nova">Outra prova</button></div></section>`;
+  }
+  function formQuestao() {
+    return O`<section class="card mt-4" aria-labelledby="np-t2"><h2 id="np-t2" class="h2 mb-3">Questão ${numero}</h2>
+      <form id="np-q" class="space-y-4" novalidate>
+        <div class="w-32"><label class="label" for="np-num">Nº da questão</label><input id="np-num" type="number" min="1" class="input" value="${numero}"></div>
+        ${mfCamposTax(ultimaTax, Yr)}
+        <div><label class="label" for="np-enun">Enunciado</label><textarea id="np-enun" class="input" rows="6"></textarea></div>
+        <fieldset class="flex gap-4 text-sm"><legend class="label">Tipo</legend><label class="flex items-center gap-2"><input type="radio" name="np-tipo" value="obj" checked class="accent-brand">Objetiva</label><label class="flex items-center gap-2"><input type="radio" name="np-tipo" value="disc" class="accent-brand">Discursiva</label></fieldset>
+        <div id="np-obj" class="space-y-3">${LETRAS.map(l => O`<div><label class="label" for="np-alt-${l}">Alternativa ${l}${l === "E" ? " (opcional)" : ""}</label><textarea id="np-alt-${l}" class="input" rows="2"></textarea></div>`)}
+          <div class="w-40"><label class="label" for="np-gab">Gabarito</label><select id="np-gab" class="input">${LETRAS.map(l => O`<option>${l}</option>`)}</select></div></div>
+        <div id="np-disc" class="hidden"><label class="label" for="np-resp">Resposta esperada</label><textarea id="np-resp" class="input" rows="4"></textarea></div>
+        <label class="flex items-center gap-2 text-sm"><input id="np-anulada" type="checkbox" class="h-4 w-4 accent-brand">Questão anulada</label>
+        <div><label class="label" for="np-com">Resolução / comentário (opcional)</label><textarea id="np-com" class="input" rows="4"></textarea></div>
+        <div><label class="label" for="np-fotos">Fotos (opcional)</label><input id="np-fotos" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" class="input py-1.5"><ul id="np-imgs" class="mt-3 space-y-2"></ul></div>
+        <p id="np-erro" class="hidden text-sm font-medium text-rose-600" role="alert"></p>
+        <div class="flex flex-wrap gap-2"><button class="btn btn-primary" type="submit" id="np-salvar">Salvar questão</button><button class="btn btn-outline" type="button" id="np-concluir">Concluir prova</button></div>
+      </form></section>`;
+  }
+  function listaImgs() {
+    const ul = r.querySelector("#np-imgs"); if (!ul) return;
+    ul.innerHTML = String(O`${imgs.map((m, k) => O`<li class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-2 dark:border-slate-700"><img src="${m.url}" alt="" class="h-14 w-14 rounded-lg object-cover">
+      <select class="input w-auto py-1.5 text-xs" data-img-pos="${k}">${posOpcoes().map(([v, t]) => O`<option value="${v}" ${v === m.pos ? ot("selected") : ""}>${t}</option>`)}</select>
+      <input class="input min-w-[8rem] flex-1 py-1.5 text-xs" data-img-leg="${k}" maxlength="200" placeholder="Legenda (opcional)" value="${m.leg}">
+      <button type="button" class="btn btn-ghost btn-sm px-2" data-img-rem="${k}" aria-label="Remover foto" title="Remover"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button></li>`)}`);
+    jn(ul);
+  }
+  function listaSalvas() {
+    return salvas.length ? O`<section class="card mt-4" aria-label="Questões adicionadas"><h2 class="h2 mb-2">Adicionadas agora (${salvas.length})</h2><ul class="divide-y divide-slate-100 dark:divide-slate-800">${salvas.map(s => O`<li class="flex items-center justify-between gap-3 py-2 text-sm"><span class="min-w-0 truncate">Questão ${s.numero} · ${s.foco}</span><a class="shrink-0 font-semibold underline" href="#/q/${encodeURIComponent(s.id)}">Abrir questão</a></li>`)}</ul></section>` : "";
+  }
+  function desenhar() {
+    r.innerHTML = String(O`<div><a href="#/importar" class="btn btn-ghost btn-sm -ml-2"><i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>Importar</a><h1 class="h1 mt-1">Criar prova do zero</h1></div>
+      <div class="mt-4">${meta ? resumoProva() : formProva()}</div>${meta ? formQuestao() : ""}<div id="np-lista">${listaSalvas()}</div>`);
+    jn(r); meta && (mfLigarTax(r, ultimaTax), listaImgs());
+  }
+  async function proximoNumero(id) {
+    let max = 0, pag = 1;
+    for (;;) { const l = await ge("listarQuestoes", { filtro: { provaId: [id], incluirAnuladas: !0 }, pagina: pag, tamanho: 200 }); (l.itens || []).forEach(x => { max = Math.max(max, x.numero); }); if ((l.itens || []).length < 200) break; pag++; }
+    return max + 1;
+  }
+  const erro = (sel, msg) => { const e = r.querySelector(sel); e.textContent = msg; e.classList.remove("hidden"); };
+  r.addEventListener("change", ev => {
+    const t = ev.target;
+    if (t.id === "np-sel") { const aut = t.value === "Autoral"; r.querySelector("#np-l-inst").textContent = aut ? "Professor / nome da prova" : "Nome completo da prova"; r.querySelector("#np-l-ano").textContent = aut ? "Turma (ano + semestre de entrada, ex.: 2023B)" : "Ano"; r.querySelector("#np-ano").placeholder = aut ? "2023B" : "2026"; }
+    if (t.name === "np-tipo") { const d = t.value === "disc"; r.querySelector("#np-obj").classList.toggle("hidden", d); r.querySelector("#np-disc").classList.toggle("hidden", !d); }
+    if (t.id === "np-fotos") { [...t.files].forEach(f => imgs.push({ file: f, url: URL.createObjectURL(f), pos: "enunciado", leg: "" })); t.value = ""; listaImgs(); }
+    if (t.dataset.imgPos !== void 0) imgs[Number(t.dataset.imgPos)].pos = t.value;
+  });
+  r.addEventListener("input", ev => { if (ev.target.dataset.imgLeg !== void 0) imgs[Number(ev.target.dataset.imgLeg)].leg = ev.target.value; });
+  r.addEventListener("click", ev => {
+    let b;
+    if ((b = ev.target.closest("[data-img-rem]"))) { const m = imgs.splice(Number(b.dataset.imgRem), 1)[0]; URL.revokeObjectURL(m.url); listaImgs(); }
+    if (ev.target.closest("#np-alterar")) { meta = null; desenhar(); }
+    if (ev.target.closest("#np-nova")) { meta = null; provaId = ""; salvas = []; imgs = []; numero = 1; desenhar(); }
+    if (ev.target.closest("#np-concluir")) location.hash = provaId ? "#/questoes?provaId=" + encodeURIComponent(provaId) : "#/questoes";
+  });
+  r.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    if (ev.target.id === "np-prova") {
+      const f = ev.target, selecao = f.selecao.value, inst = f.instituicao.value.trim(), ano = f.ano.value.trim(), aut = selecao === "Autoral";
+      if (aut && !turmaOk(ano)) return erro("#np-erro-p", "Informe a turma com ano e semestre, como 2023B.");
+      if (!aut && !/^(19|20)\d{2}$/.test(ano)) return erro("#np-erro-p", "Informe o ano com 4 dígitos, como 2026.");
+      meta = { selecao, instituicao: inst, nome: f.nome.value.trim(), ...(aut ? { turma: turmaNorm(ano), ano: Number(ano.slice(0, 4)) } : { ano: Number(ano) }) };
+      try {
+        const fa = (await ge("listarQuestoes", { facetas: !0, tamanho: 1 })).facetas.provas.find(p => p.instituicao === inst && (p.selecao || "") === selecao && (aut ? p.turma === meta.turma : p.ano === meta.ano && !p.turma));
+        if (fa) { provaId = fa.id; numero = await proximoNumero(fa.id); meta.existente = !0; } else { provaId = ""; numero = 1; }
+      } catch (x) { be(x.message, "erro"); }
+      return desenhar();
+    }
+    if (ev.target.id !== "np-q" || salvando) return;
+    const v = id => r.querySelector(id).value, disc = r.querySelector('[name="np-tipo"]:checked').value === "disc";
+    r.querySelector("#np-erro").classList.add("hidden");
+    try {
+      let tax = { area: v("#t-area"), subarea: v("#t-sub"), foco: v("#t-foco"), novoFoco: r.querySelector("#t-novo") ? v("#t-novo") : "" };
+      tax = await mfResolverFoco(tax);
+      const num = Number(v("#np-num")), enun = v("#np-enun").trim();
+      if (!Number.isInteger(num) || num < 1) throw new Error("Número da questão inválido.");
+      if (!tax.subarea || !tax.foco) throw new Error("Escolha a subárea e o foco.");
+      if (!enun) throw new Error("Escreva o enunciado.");
+      const ob = { numero: num, area: tax.area, subarea: tax.subarea, foco: tax.foco, enunciado: enun, anulada: r.querySelector("#np-anulada").checked, comentario: v("#np-com").trim() };
+      let n = 0;
+      if (disc) { ob.alternativas = []; ob.gabarito = v("#np-resp").trim(); }
+      else {
+        const tem = l => v("#np-alt-" + l).trim() || imgs.some(m => m.pos === "alternativa_" + l);
+        for (const l of ["A", "B", "C", "D"]) if (!tem(l)) throw new Error(`A alternativa ${l} está vazia.`);
+        n = tem("E") ? 5 : 4;
+        ob.alternativas = LETRAS.slice(0, n).map(l => ({ letra: l, texto: v("#np-alt-" + l).trim() }));
+        ob.gabarito = v("#np-gab");
+        if (!ob.anulada && LETRAS.indexOf(ob.gabarito) >= n) throw new Error("O gabarito aponta para uma alternativa que não existe.");
+      }
+      const ok = new Set(["enunciado", "comentario", ...LETRAS.slice(0, n).map(l => "alternativa_" + l)]);
+      const lista = imgs.map((m, k) => ({ ...m, nome: `q${num}-${k + 1}.${(m.file.type.split("/")[1] || "png").replace("jpeg", "jpg").replace("svg+xml", "svg")}` }));
+      lista.forEach(m => { if (!ok.has(m.pos)) throw new Error(`A foto “${m.file.name}” está numa posição que não existe nesta questão.`); });
+      ob.imagens = lista.map(m => ({ arquivo: m.nome, posicao: m.pos, legenda: m.leg }));
+      salvando = !0; r.querySelector("#np-salvar").disabled = !0;
+      const prova = { instituicao: meta.instituicao, selecao: meta.selecao, ...(meta.nome ? { nome: meta.nome } : {}), ...(meta.turma ? { turma: meta.turma } : { ano: meta.ano }), ...(provaId ? { id: provaId } : {}) };
+      const res = await ge("importarLote", { prova, questoes: [ob], offset: 0 });
+      if (res.erros.length) throw new Error(res.erros[0].motivo);
+      if (res.duplicadas.length) throw new Error(`A questão ${num} já existe nesta prova. Mude o número.`);
+      provaId = res.provaId || provaId; meta.existente = !0;
+      const falhas = [];
+      for (const up of res.paraUpload) { const m = lista.find(x => x.nome === up.arquivo); if (!m) continue; try { await mfUploadImgQuestao(up.questaoId, up.arquivo, m.file); } catch (x) { falhas.push(m.file.name); } }
+      const qid = res.paraUpload.length ? res.paraUpload[0].questaoId : (provaId + "-q" + ("000" + num).slice(-3));
+      salvas.push({ numero: num, foco: tax.foco, id: qid });
+      ultimaTax = { area: tax.area, subarea: tax.subarea, foco: tax.foco };
+      be(falhas.length ? `Questão salva, mas ${Gt(falhas.length, "foto não foi enviada", "fotos não foram enviadas")}: ${falhas.join(", ")}` : `Questão ${num} salva.`, falhas.length ? "erro" : "ok", falhas.length ? 8000 : 2500);
+      imgs.forEach(m => URL.revokeObjectURL(m.url)); imgs = []; numero = num + 1;
+      ["#np-enun", "#np-com", "#np-resp", ...LETRAS.map(l => "#np-alt-" + l)].forEach(s => { r.querySelector(s).value = ""; });
+      r.querySelector("#np-anulada").checked = !1; r.querySelector("#np-num").value = numero; r.querySelector("#np-t2").textContent = "Questão " + numero;
+      r.querySelector("#np-lista").innerHTML = String(listaSalvas()); listaImgs(); jn(r);
+      r.querySelector("#np-enun").focus();
+    } catch (x) { erro("#np-erro", x.message); }
+    salvando = !1; const sb = r.querySelector("#np-salvar"); sb && (sb.disabled = !1);
+  });
+  desenhar();
+} };
+
+
 var Fg={};xn(Fg,{render:()=>RA});function SA(r){let e=(hh[r.area]||{}).fg||"#334155",t=r.perc===null?0:r.perc;return O`<li class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
     <div class="sm:w-60">${Vt(r.area)}</div>
     <div class="flex flex-1 items-center gap-3">
@@ -3457,11 +3751,11 @@ function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64
     </div>
   </section>
 
-  <div id="resultado" class="mt-4">${Wi(4)}</div>`);let m=q=>r.querySelector(q),ms={},selTodas=()=>u?u.selecoes:["R1","R+","Prova de T\xEDtulo"],provasSel=()=>(u?u.provas:[]).filter(w=>!a.selecao.length||a.selecao.includes(w.selecao)),opcoes={selecao:()=>selTodas().map(x=>({v:x,t:x,n:(u?u.provas:[]).filter(w=>w.selecao===x).reduce((w,y)=>w+y.total,0)})),prova:()=>provasSel().map(w=>({v:w.id,t:`${w.instituicao} ${w.ano}${w.rotulo?" \xB7 "+w.rotulo:""}`,n:w.total})),ano:()=>[...new Set(provasSel().map(w=>w.ano))].sort((w,y)=>y-w).map(w=>({v:String(w),t:String(w)})),sub:()=>Bh(a.area,[]).subareas.map(w=>({v:w,t:w})),foco:()=>Bh(a.area,a.subarea).focos.map(w=>({v:w,t:w}))},chave={selecao:"selecao",prova:"provaId",ano:"ano",sub:"subarea",foco:"foco"},podar=()=>{u&&(a.provaId=a.provaId.filter(w=>opcoes.prova().some(y=>y.v===w)),a.ano=a.ano.filter(w=>opcoes.ano().some(y=>y.v===String(w)))),a.subarea=a.subarea.filter(w=>opcoes.sub().some(y=>y.v===w)),a.foco=a.foco.filter(w=>opcoes.foco().some(y=>y.v===w))};for(let[id,vz,un]of[["selecao","Todas","sele\xE7\xF5es"],["prova","Todas","provas"],["ano","Todos","anos"],["sub","Todas","sub\xE1reas"],["foco","Todos","focos"]])ms[id]=mfMulti({raiz:r,id,opcoes:opcoes[id],selecionadas:()=>a[chave[id]],vazio:vz,unidade:un,aoMudar:q=>{a[chave[id]]=q,podar(),Object.values(ms).forEach(w=>w.atualizar()),o=1,A()}});function v(){podar(),Object.values(ms).forEach(q=>q.atualizar())}function _(){v()}async function A(){let q=m("#resultado");history.replaceState(null,"",p());try{let Q=await ge("listarQuestoes",{filtro:d(),pagina:o,tamanho:zv,facetas:!u});Q.facetas&&(u=Q.facetas,_()),l=Q.total;let w=Math.max(1,Math.ceil(l/zv));if(o>w)return o=w,A();m("#contagem").textContent=l?`${Gt(l,"quest\xE3o","quest\xF5es")} encontrada${l===1?"":"s"}`:"Nenhuma quest\xE3o encontrada",Q.itens.length?q.innerHTML=String(O`
+  <div id="resultado" class="mt-4">${Wi(4)}</div>`);let m=q=>r.querySelector(q),ms={},selTodas=()=>u?u.selecoes:["R1","R+","Prova de T\xEDtulo","Autoral"],provasSel=()=>(u?u.provas:[]).filter(w=>(!a.selecao.length||a.selecao.includes(w.selecao))&&(w.selecao!=="Autoral"||a.selecao.includes("Autoral"))),opcoes={selecao:()=>selTodas().map(x=>({v:x,t:x,n:(u?u.provas:[]).filter(w=>w.selecao===x).reduce((w,y)=>w+y.total,0)})),prova:()=>provasSel().map(w=>({v:w.id,t:`${w.instituicao} ${mfAno(w)}${w.rotulo?" \xB7 "+w.rotulo:""}`,n:w.total})),ano:()=>[...new Set(provasSel().map(w=>w.ano))].sort((w,y)=>y-w).map(w=>({v:String(w),t:String(w)})),sub:()=>Bh(a.area,[]).subareas.map(w=>({v:w,t:w})),foco:()=>Bh(a.area,a.subarea).focos.map(w=>({v:w,t:w}))},chave={selecao:"selecao",prova:"provaId",ano:"ano",sub:"subarea",foco:"foco"},podar=()=>{u&&(a.provaId=a.provaId.filter(w=>opcoes.prova().some(y=>y.v===w)),a.ano=a.ano.filter(w=>opcoes.ano().some(y=>y.v===String(w)))),a.subarea=a.subarea.filter(w=>opcoes.sub().some(y=>y.v===w)),a.foco=a.foco.filter(w=>opcoes.foco().some(y=>y.v===w))};for(let[id,vz,un]of[["selecao","Todas","sele\xE7\xF5es"],["prova","Todas","provas"],["ano","Todos","anos"],["sub","Todas","sub\xE1reas"],["foco","Todos","focos"]])ms[id]=mfMulti({raiz:r,id,opcoes:opcoes[id],selecionadas:()=>a[chave[id]],vazio:vz,unidade:un,aoMudar:q=>{a[chave[id]]=q,podar(),Object.values(ms).forEach(w=>w.atualizar()),o=1,A()}});function v(){podar(),Object.values(ms).forEach(q=>q.atualizar())}function _(){v()}async function A(){let q=m("#resultado");history.replaceState(null,"",p());try{let Q=await ge("listarQuestoes",{filtro:d(),pagina:o,tamanho:zv,facetas:!u});Q.facetas&&(u=Q.facetas,_()),l=Q.total;let w=Math.max(1,Math.ceil(l/zv));if(o>w)return o=w,A();m("#contagem").textContent=l?`${Gt(l,"quest\xE3o","quest\xF5es")} encontrada${l===1?"":"s"}`:"Nenhuma quest\xE3o encontrada",Q.itens.length?q.innerHTML=String(O`
         <ul class="space-y-2">${Q.itens.map(y=>{let g=Ee.prefs.ocultarFoco!==!1&&y.status==="nova";return O`<li><button type="button" data-abrir="${y.id}" class="card flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-brand dark:hover:border-sky-400">
             <span class="shrink-0">${PA(y.anulada?"anulada":y.status)}</span>
             <span class="min-w-0 flex-1">
-              <span class="block text-sm font-semibold">${y.instituicao} ${y.ano}${y.selecaoRotulo?" \xB7 "+y.selecaoRotulo:""} <span class="muted font-medium">· Questão ${y.numero}</span>${y.anulada?O` <span class="muted font-medium">· anulada</span>`:""}</span>
+              <span class="block text-sm font-semibold">${y.instituicao} ${mfAno(y)}${y.selecaoRotulo?" \xB7 "+y.selecaoRotulo:""} <span class="muted font-medium">· Questão ${y.numero}</span>${y.anulada?O` <span class="muted font-medium">· anulada</span>`:""}</span>
               <span class="mt-1 flex flex-wrap items-center gap-2">${g?O`${Ee.prefs.ocultarArea?"":Vt(y.area)}<span class="muted inline-flex items-center gap-1.5 text-xs"><i data-lucide="eye-off" class="h-3.5 w-3.5" aria-hidden="true"></i>${Ee.prefs.ocultarArea?"\xC1rea e foco ocultos":"foco oculto"}</span>`:O`${Vt(y.area)}<span class="muted truncate text-xs">${y.subarea} › ${y.foco}</span>`}</span>
             </span>
             <span class="flex shrink-0 items-center gap-1.5 text-rose-500">${y.favorita?O`<i data-lucide="heart" class="h-4 w-4 fill-current" aria-hidden="true"></i><span class="sr-only">Favorita</span>`:""}${y.revisar?O`<i data-lucide="bookmark" class="h-4 w-4 fill-current text-sky-600" aria-hidden="true"></i><span class="sr-only">Revisar depois</span>`:""}</span>
@@ -3532,7 +3826,7 @@ function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64
         <div class="min-w-0">
           <h1 class="text-lg font-bold text-brand dark:text-slate-100">Questão ${M.numero}</h1>
           <div class="mt-2 flex flex-wrap items-center gap-2">
-            ${kC("graduation-cap",`${M.instituicao} - ${M.ano}${M.selecaoRotulo?" \xB7 "+M.selecaoRotulo:""}`)}
+            ${kC("graduation-cap",`${M.instituicao} - ${mfAno(M)}${M.selecaoRotulo?" \xB7 "+M.selecaoRotulo:""}`)}
             ${mfCaminho(M,Lt)}
             
             ${M.anulada?O`<span class="chip" style="--bg:#F1F5F9;--fg:#475569"><i data-lucide="ban" aria-hidden="true"></i>Anulada</span>`:""}
@@ -3541,7 +3835,7 @@ function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64
         <div class="flex flex-wrap items-center justify-end gap-1">
           ${window.top!==window?ot('<button type="button" id="b-env" class="mr-1 inline-flex items-center gap-2 rounded-full bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700" title="Enviar esta questão para as Notas da Rotina"><i data-lucide="send" class="h-4 w-4" aria-hidden="true"></i><span>Enviar para Notas</span></button>'):""}
           ${mfAdmin()?Gn("b-editq","square-pen","Editar quest\xE3o",null):""}
-          ${Gn("b-recat","tag","Recategorizar quest\xE3o",null)}
+          ${mfAdmin()?Gn("b-recat","tag","Recategorizar quest\xE3o",null):""}
           ${Gn("b-rep","triangle-alert","Reportar problema nesta quest\xE3o",null)}
           ${Gn("b-caderno","bookmark","Enviar ao caderno",null)}${Gn("b-fav","heart",l.has(V)?"Remover dos favoritos":"Favoritar",l.has(V)?"true":"false",l.has(V)?"fill-current text-rose-500":"")}
           ${O`<button type="button" id="b-nota" class="relative flex h-9 w-9 items-center justify-center rounded-full text-brand hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800" aria-label="Anotação e revisão" title="Anotação e revisão"><i data-lucide="pencil" class="h-5 w-5" aria-hidden="true"></i>${ji||B.has(V)?O`<span class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-sky-500 ring-2 ring-white dark:ring-slate-900"></span>`:""}</button>`}
@@ -3607,8 +3901,8 @@ function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64
     <section class="card" aria-labelledby="t-provas">
       <h2 id="t-provas" class="h2 mb-3">Provas completas</h2>
       ${s.length?O`<ul class="divide-y divide-slate-100 dark:divide-slate-800">${s.map(p=>O`
-        <li class="flex items-center justify-between gap-3 py-2.5"><span class="text-sm"><span class="font-semibold">${p.instituicao} ${p.ano}</span> <span class="muted">· ${Gt(p.total,"quest\xE3o","quest\xF5es")}${p.selecao?" · "+p.selecao:""}</span></span>
-          <span class="flex shrink-0 items-center gap-1"><button type="button" class="btn btn-outline btn-sm" data-prova="${p.id}" data-nome="${p.instituicao} ${p.ano}${p.rotulo?" \xB7 "+p.rotulo:""}">Fazer prova</button><button type="button" class="btn btn-ghost btn-sm px-2" data-excluir-prova="${p.id}" data-nome="${p.instituicao} ${p.ano}${p.rotulo?" \xB7 "+p.rotulo:""}" aria-label="Excluir a prova ${p.instituicao} ${p.ano}${p.rotulo?" \xB7 "+p.rotulo:""}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button></span></li>`)}</ul>`:$n("files","Sem provas","Importe quest\xF5es para liberar as provas completas.",O`<a class="btn btn-primary mt-4" href="#/importar">Importar</a>`)}
+        <li class="flex items-center justify-between gap-3 py-2.5"><span class="text-sm"><span class="font-semibold">${p.instituicao} ${mfAno(p)}</span> <span class="muted">· ${Gt(p.total,"quest\xE3o","quest\xF5es")}${p.selecao?" · "+p.selecao:""}</span></span>
+          <span class="flex shrink-0 items-center gap-1"><button type="button" class="btn btn-outline btn-sm" data-prova="${p.id}" data-nome="${p.instituicao} ${mfAno(p)}${p.rotulo?" \xB7 "+p.rotulo:""}">Fazer prova</button><button type="button" class="btn btn-ghost btn-sm px-2" data-excluir-prova="${p.id}" data-nome="${p.instituicao} ${mfAno(p)}${p.rotulo?" \xB7 "+p.rotulo:""}" aria-label="Excluir a prova ${p.instituicao} ${mfAno(p)}${p.rotulo?" \xB7 "+p.rotulo:""}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button></span></li>`)}</ul>`:$n("files","Sem provas","Importe quest\xF5es para liberar as provas completas.",O`<a class="btn btn-primary mt-4" href="#/importar">Importar</a>`)}
     </section>
 
     <section class="card" aria-labelledby="t-sim">
@@ -3681,12 +3975,13 @@ ${a}</section>
     <div class="flex gap-1.5 print:hidden" role="group" aria-label="Filtrar questões">${[["todas","Todas"],["erradas","Erradas"],["brancos","Em branco"]].map(([m,v],_)=>O`<button type="button" class="btn btn-sm ${_===0?"btn-primary":"btn-outline"}" data-f="${m}" aria-pressed="${_===0}">${v}</button>`)}</div></div>
     <ul id="itens" class="divide-y divide-slate-100 dark:divide-slate-800"></ul></section>`);let l="todas",B=()=>n.itens.filter(m=>l==="todas"||l==="erradas"&&m.c===0||l==="brancos"&&m.c===-1),d=m=>m===1?O`<span class="text-emerald-700 dark:text-emerald-400">Certa</span>`:m===0?O`<span class="text-rose-700 dark:text-rose-400">Errada</span>`:m===-1?O`<span class="muted">Em branco</span>`:O`<span class="muted">Anulada</span>`;function p(){let m=B();r.querySelector("#itens").innerHTML=String(O`${m.length?m.map(v=>O`
       <li><button type="button" data-abrir="${v.id}" class="flex w-full items-center gap-3 py-2.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800/60">
-        <span class="w-36 shrink-0 font-semibold">${v.instituicao} ${v.ano} · Q${v.numero}</span>
+        <span class="w-36 shrink-0 font-semibold">${v.instituicao} ${mfAno(v)} · Q${v.numero}</span>
         <span class="min-w-0 flex-1 truncate">${Vt(v.area)} <span class="muted ml-1 text-xs">${v.foco}</span></span>
         <span class="muted hidden shrink-0 text-xs sm:inline">${v.marcada==="§"?"Discursiva · autoavaliada":(v.marcada?"Marcada "+v.marcada:"\u2014")+" · Gabarito "+(v.gabarito||"\u2014")}</span>
-        <span class="w-16 shrink-0 text-right font-semibold">${d(v.c)}</span></button></li>`):O`<li class="muted py-6 text-center text-sm">Nenhuma questão neste filtro.</li>`}`),window.lucide&&window.lucide.createIcons()}p(),r.addEventListener("click",async m=>{let v=m.target.closest("[data-f]");if(v)return l=v.dataset.f,r.querySelectorAll("[data-f]").forEach(A=>{let N=A===v;A.classList.toggle("btn-primary",N),A.classList.toggle("btn-outline",!N),A.setAttribute("aria-pressed",N)}),p();let _=m.target.closest("[data-abrir]");if(_)return sessionStorage.setItem("bq_fila",JSON.stringify({ids:B().map(A=>A.id),origem:"#/relatorio/"+n.sessaoId})),t("#/q/"+encodeURIComponent(_.dataset.abrir));if(m.target.closest("#b-refazer")){let A=m.target.closest("#b-refazer");A.disabled=!0;try{let N=await ge("iniciarSessao",{refazerDe:n.sessaoId,modo:"imediato"});t("#/sessao/"+N.sessaoId)}catch(N){be(N.message,"erro"),A.disabled=!1}}})}var $g={};xn($g,{render:()=>WA});var $A=["Cl\xEDnica M\xE9dica","Cirurgia Geral","Ginecologia e Obstetr\xEDcia","Pediatria","Preventiva","Radiologia"],KB=["A","B","C","D","E"],Ft=r=>r==null?"":String(r).trim();function Zv(r){let e={};return r.areas.forEach(t=>t.subareas.forEach(n=>{e[t.nome+"|"+n.nome]=new Set(n.focos)})),e}function JA(r,e,t,n){if(!$A.includes(e))return`\xC1rea inv\xE1lida: "${e}"`;let s=r[e+"|"+t];return s?s.has(n)?null:`Foco "${n}" n\xE3o existe em "${e} \u203A ${t}"`:`Sub\xE1rea "${t}" n\xE3o existe em "${e}"`}function zA(r,e){if(!r||typeof r!="object"||Array.isArray(r))return"Quest\xE3o inv\xE1lida (n\xE3o \xE9 um objeto).";let t=Number(r.numero);if(!Number.isInteger(t)||t<1)return'Campo "numero" deve ser um inteiro positivo.';if(!$A.includes(Ft(r.area)))return`\xC1rea inv\xE1lida: "${Ft(r.area)}"`;if(!Ft(r.subarea)||!Ft(r.foco))return'Informe "subarea" e "foco".';if(Ft(r.subarea).length>120||Ft(r.foco).length>120)return'"subarea" e "foco" aceitam no m\xE1ximo 120 caracteres.';if(!Ft(r.enunciado))return"Enunciado vazio.";let s=r.alternativas===void 0||r.alternativas===null?[]:r.alternativas;if(!Array.isArray(s)||s.length&&(s.length<4||s.length>5))return"Use 4 ou 5 alternativas (ou nenhuma, em quest\xE3o discursiva).";let i=r.imagens===void 0||r.imagens===null?[]:r.imagens;if(!Array.isArray(i))return'Campo "imagens" deve ser uma lista.';let a=["enunciado","comentario",...s.map((u,l)=>"alternativa_"+KB[l])];for(let u=0;u<i.length;u++){let l=i[u]||{};if(!Ft(l.arquivo))return`Imagem ${u+1} sem "arquivo".`;if(!a.includes(Ft(l.posicao)))return`Imagem "${Ft(l.arquivo)}": posi\xE7\xE3o inv\xE1lida "${Ft(l.posicao)}".`}for(let u=0;u<s.length;u++){let l=s[u]||{},B=Ft(l.letra).toUpperCase();if(B!==KB[u])return`Alternativas devem estar em ordem (esperado "${KB[u]}", veio "${B}").`;if(!Ft(l.texto)&&!i.some(d=>Ft(d.posicao)==="alternativa_"+B))return`Alternativa ${B} vazia (sem texto nem imagem).`}return!(r.anulada===!0||r.anulada==="true"||r.anulada===1)&&s.length&&!s.some((u,l)=>KB[l]===Ft(r.gabarito).toUpperCase())?`Gabarito "${Ft(r.gabarito).toUpperCase()}" n\xE3o corresponde a uma alternativa.`:null}function ew(r,e){let t={erroGeral:null,prova:null,total:0,validas:0,erros:[],imagens:[],novos:[]};if(!r||typeof r!="object")return t.erroGeral="O arquivo n\xE3o cont\xE9m um objeto JSON.",t;let n=r.prova||{};if(!Ft(n.instituicao))return t.erroGeral="prova.instituicao \xE9 obrigat\xF3rio.",t;if(!Number.isInteger(Number(n.ano))||Number(n.ano)<1950||Number(n.ano)>2100)return t.erroGeral="prova.ano inv\xE1lido.",t;if(!Array.isArray(r.questoes)||!r.questoes.length)return t.erroGeral='Lista "questoes" vazia ou ausente.',t;t.prova={instituicao:Ft(n.instituicao),ano:Number(n.ano),nome:Ft(n.nome),id:Ft(n.id),selecao:Ft(n.selecao)},t.total=r.questoes.length;let s=new Set;return r.questoes.forEach((i,a)=>{let o=zA(i,e);if(o){t.erros.push({linha:a+1,numero:i&&i.numero,id:i&&i.id,motivo:o});return}if(s.has(Number(i.numero))){t.erros.push({linha:a+1,numero:i.numero,id:i.id,motivo:`N\xFAmero ${i.numero} repetido no mesmo arquivo.`});return}s.add(Number(i.numero)),t.validas++,mfNotarFocoNovo(e,i,t),(i.imagens||[]).forEach(u=>t.imagens.push(Ft(u.arquivo)))}),t}var tw=40,jg=1572864,KA={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",svg:"image/svg+xml"},QB=r=>KA[r.toLowerCase().split(".").pop()||""]||null;function QA(r){let e=new Uint8Array(r),t="";for(let n=0;n<e.length;n+=32768)t+=String.fromCharCode.apply(null,e.subarray(n,n+32768));return btoa(t)}async function WA(r){await mfAtualizarTax();let e=Zv(Ee.taxonomia),t=null,n=!1;r.innerHTML=String(O`
+        <span class="w-16 shrink-0 text-right font-semibold">${d(v.c)}</span></button></li>`):O`<li class="muted py-6 text-center text-sm">Nenhuma questão neste filtro.</li>`}`),window.lucide&&window.lucide.createIcons()}p(),r.addEventListener("click",async m=>{let v=m.target.closest("[data-f]");if(v)return l=v.dataset.f,r.querySelectorAll("[data-f]").forEach(A=>{let N=A===v;A.classList.toggle("btn-primary",N),A.classList.toggle("btn-outline",!N),A.setAttribute("aria-pressed",N)}),p();let _=m.target.closest("[data-abrir]");if(_)return sessionStorage.setItem("bq_fila",JSON.stringify({ids:B().map(A=>A.id),origem:"#/relatorio/"+n.sessaoId})),t("#/q/"+encodeURIComponent(_.dataset.abrir));if(m.target.closest("#b-refazer")){let A=m.target.closest("#b-refazer");A.disabled=!0;try{let N=await ge("iniciarSessao",{refazerDe:n.sessaoId,modo:"imediato"});t("#/sessao/"+N.sessaoId)}catch(N){be(N.message,"erro"),A.disabled=!1}}})}var $g={};xn($g,{render:()=>WA});var $A=["Cl\xEDnica M\xE9dica","Cirurgia Geral","Ginecologia e Obstetr\xEDcia","Pediatria","Preventiva","Radiologia"],KB=["A","B","C","D","E"],Ft=r=>r==null?"":String(r).trim();function Zv(r){let e={};return r.areas.forEach(t=>t.subareas.forEach(n=>{e[t.nome+"|"+n.nome]=new Set(n.focos)})),e}function JA(r,e,t,n){if(!$A.includes(e))return`\xC1rea inv\xE1lida: "${e}"`;let s=r[e+"|"+t];return s?s.has(n)?null:`Foco "${n}" n\xE3o existe em "${e} \u203A ${t}"`:`Sub\xE1rea "${t}" n\xE3o existe em "${e}"`}function zA(r,e){if(!r||typeof r!="object"||Array.isArray(r))return"Quest\xE3o inv\xE1lida (n\xE3o \xE9 um objeto).";let t=Number(r.numero);if(!Number.isInteger(t)||t<1)return'Campo "numero" deve ser um inteiro positivo.';if(!$A.includes(Ft(r.area)))return`\xC1rea inv\xE1lida: "${Ft(r.area)}"`;if(!Ft(r.subarea)||!Ft(r.foco))return'Informe "subarea" e "foco".';if(Ft(r.subarea).length>120||Ft(r.foco).length>120)return'"subarea" e "foco" aceitam no m\xE1ximo 120 caracteres.';if(!Ft(r.enunciado))return"Enunciado vazio.";let s=r.alternativas===void 0||r.alternativas===null?[]:r.alternativas;if(!Array.isArray(s)||s.length&&(s.length<4||s.length>5))return"Use 4 ou 5 alternativas (ou nenhuma, em quest\xE3o discursiva).";let i=r.imagens===void 0||r.imagens===null?[]:r.imagens;if(!Array.isArray(i))return'Campo "imagens" deve ser uma lista.';let a=["enunciado","comentario",...s.map((u,l)=>"alternativa_"+KB[l])];for(let u=0;u<i.length;u++){let l=i[u]||{};if(!Ft(l.arquivo))return`Imagem ${u+1} sem "arquivo".`;if(!a.includes(Ft(l.posicao)))return`Imagem "${Ft(l.arquivo)}": posi\xE7\xE3o inv\xE1lida "${Ft(l.posicao)}".`}for(let u=0;u<s.length;u++){let l=s[u]||{},B=Ft(l.letra).toUpperCase();if(B!==KB[u])return`Alternativas devem estar em ordem (esperado "${KB[u]}", veio "${B}").`;if(!Ft(l.texto)&&!i.some(d=>Ft(d.posicao)==="alternativa_"+B))return`Alternativa ${B} vazia (sem texto nem imagem).`}return!(r.anulada===!0||r.anulada==="true"||r.anulada===1)&&s.length&&!s.some((u,l)=>KB[l]===Ft(r.gabarito).toUpperCase())?`Gabarito "${Ft(r.gabarito).toUpperCase()}" n\xE3o corresponde a uma alternativa.`:null}function ew(r,e){let t={erroGeral:null,prova:null,total:0,validas:0,erros:[],imagens:[],novos:[]};if(!r||typeof r!="object")return t.erroGeral="O arquivo n\xE3o cont\xE9m um objeto JSON.",t;let n=r.prova||{};if(!Ft(n.instituicao))return t.erroGeral="prova.instituicao \xE9 obrigat\xF3rio.",t;let mfT=Ft(n.turma);if(mfT){if(!/^(?:19|20)\d{2}\s*[-.\/]?\s*[ABab12]$/.test(mfT))return t.erroGeral="prova.turma inv\xE1lida (use ano + semestre, como 2023B).",t;if(Ft(n.selecao).toLowerCase()!=="autoral")return t.erroGeral="prova.turma s\xF3 vale com selecao Autoral.",t;n={...n,ano:mfT.slice(0,4)}}else if(Ft(n.selecao).toLowerCase()==="autoral")return t.erroGeral="prova.turma \xE9 obrigat\xF3ria na prova Autoral (ex.: 2023B).",t;if(!Number.isInteger(Number(n.ano))||Number(n.ano)<1950||Number(n.ano)>2100)return t.erroGeral="prova.ano inv\xE1lido.",t;if(!Array.isArray(r.questoes)||!r.questoes.length)return t.erroGeral='Lista "questoes" vazia ou ausente.',t;t.prova={instituicao:Ft(n.instituicao),ano:Number(n.ano),turma:mfT?mfT.replace(/\s|[-.\/]/g,"").replace(/1$/,"A").replace(/2$/,"B").toUpperCase():"",nome:Ft(n.nome),id:Ft(n.id),selecao:Ft(n.selecao)},t.total=r.questoes.length;let s=new Set;return r.questoes.forEach((i,a)=>{let o=zA(i,e);if(o){t.erros.push({linha:a+1,numero:i&&i.numero,id:i&&i.id,motivo:o});return}if(s.has(Number(i.numero))){t.erros.push({linha:a+1,numero:i.numero,id:i.id,motivo:`N\xFAmero ${i.numero} repetido no mesmo arquivo.`});return}s.add(Number(i.numero)),t.validas++,mfNotarFocoNovo(e,i,t),(i.imagens||[]).forEach(u=>t.imagens.push(Ft(u.arquivo)))}),t}var tw=40,jg=1572864,KA={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",svg:"image/svg+xml"},QB=r=>KA[r.toLowerCase().split(".").pop()||""]||null;function QA(r){let e=new Uint8Array(r),t="";for(let n=0;n<e.length;n+=32768)t+=String.fromCharCode.apply(null,e.subarray(n,n+32768));return btoa(t)}async function WA(r){await mfAtualizarTax();let e=Zv(Ee.taxonomia),t=null,n=!1;r.innerHTML=String(O`
   <h1 class="h1">Importar questões</h1>
   <p class="muted mt-1 max-w-2xl text-sm">Envie arquivos <code>.json</code> ou um <code>.zip</code> com o JSON e a pasta <code>imagens/</code>.</p>
+  ${mfAdmin()?O`<p class="mt-3"><a href="#/prova-nova" class="btn btn-outline btn-sm"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Criar prova do zero</a></p>`:""}
 
   <div id="drop" class="card mt-5 flex flex-col items-center gap-3 border-2 border-dashed py-10 text-center" tabindex="-1">
     <i data-lucide="upload-cloud" class="h-8 w-8 text-slate-400" aria-hidden="true"></i>
@@ -3700,7 +3995,7 @@ ${a}</section>
   <div id="area" class="mt-6" aria-live="polite"></div>`);mfLigarExportacao(r);let s=_=>r.querySelector(_),i=s("#area");async function a(_){let A=[],N=new Map,K=[],$=async(z,q)=>{let Q;try{Q=JSON.parse(z)}catch(w){K.push(`${q}: JSON inv\xE1lido (${w.message})`);return}if(!Q||typeof Q!="object"||Q.questoes===void 0&&Q.prova===void 0){K.push(`${q}: ignorado (n\xE3o parece um arquivo de quest\xF5es).`);return}A.push({origem:q,doc:Q,val:ew(Q,e)})};for(let z of _){let q=z.name.toLowerCase();if(q.endsWith(".json"))await $(await z.text(),z.name);else if(q.endsWith(".zip")){if(!window.JSZip){K.push(`${z.name}: a biblioteca JSZip n\xE3o carregou (verifique a internet).`);continue}try{let Q=await window.JSZip.loadAsync(z);for(let[w,y]of Object.entries(Q.files)){let g=w.split("/").pop();y.dir||w.startsWith("__MACOSX/")||g.startsWith("._")||(w.toLowerCase().endsWith(".json")?await $(await y.async("string"),`${z.name} \u203A ${w}`):QB(w)&&N.set(w.toLowerCase().replace(/\\/g,"/"),{nome:w,mime:QB(w),obter:()=>y.async("arraybuffer")}))}}catch(Q){K.push(`${z.name}: n\xE3o foi poss\xEDvel abrir o zip (${Q.message}).`)}}else QB(q)?N.set(q,{nome:z.name,mime:QB(q),obter:()=>z.arrayBuffer()}):K.push(`${z.name}: tipo de arquivo n\xE3o suportado.`)}return{docs:A,imagens:N,problemas:K}}function o(_,A){let N=String(A).toLowerCase().replace(/\\/g,"/").replace(/^\.?\//,"");if(_.has(N))return _.get(N);if(_.has("imagens/"+N))return _.get("imagens/"+N);for(let[$,z]of _)if($.endsWith("/"+N))return z;let K=N.split("/").pop();for(let[$,z]of _)if($.split("/").pop()===K)return z;return null}function u(){let{docs:_,imagens:A,problemas:N}=t,K=_.filter(z=>!z.val.erroGeral),$=K.reduce((z,q)=>z+q.val.validas,0);i.innerHTML=String(O`
       ${N.length?O`<div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" role="alert"><ul class="list-disc pl-5">${N.map(z=>O`<li>${z}</li>`)}</ul></div>`:""}
       <ul class="space-y-3">${_.map(z=>{let q=z.val,Q=[...new Set(q.imagens)].filter(w=>!o(A,w));return O`<li class="card">
-          <div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold">${q.prova?`${q.prova.instituicao} ${q.prova.ano}${q.prova.selecao?" \xB7 "+q.prova.selecao:""}`:z.origem}</p><span class="muted text-xs">${z.origem}</span></div>
+          <div class="flex flex-wrap items-center justify-between gap-2"><p class="font-semibold">${q.prova?`${q.prova.instituicao} ${mfAno(q.prova)}${q.prova.selecao?" \xB7 "+q.prova.selecao:""}`:z.origem}</p><span class="muted text-xs">${z.origem}</span></div>
           ${q.erroGeral?O`<p class="mt-2 text-sm font-medium text-rose-600">${q.erroGeral}</p>`:O`
             <p class="mt-1 text-sm">${Gt(q.total,"quest\xE3o","quest\xF5es")} no arquivo · <span class="text-emerald-700 dark:text-emerald-400">${q.validas} válidas</span>${q.erros.length?O` · <span class="text-rose-600">${q.erros.length} com erro</span>`:""}</p>
             ${q.novos.length?O`<details class="mt-1"><summary class="cursor-pointer text-sm font-medium text-sky-700 dark:text-sky-300">Focos novos que ser\xE3o criados (${q.novos.length})</summary><ul class="mt-2 max-h-40 list-disc space-y-1 overflow-auto pl-5 text-xs">${q.novos.map(w=>O`<li>${w.area} \u203A ${w.subarea} \u203A ${w.foco}</li>`)}</ul></details>`:""}${q.imagens.length?O`<p class="muted mt-1 text-xs">Imagens referenciadas: ${new Set(q.imagens).size} · encontradas: ${new Set(q.imagens).size-Q.length}${Q.length?O` · <span class="font-medium text-amber-700 dark:text-amber-400">faltando: ${Q.join(", ")}</span>`:""}</p>`:""}
@@ -3715,7 +4010,7 @@ ${a}</section>
         <div><p class="mb-1 text-sm font-semibold" id="p1-t">Enviando questões…</p><div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="p1"><div class="h-full w-0 rounded-full bg-brand transition-all" id="p1-b"></div></div></div>
         <div id="bloco2" class="hidden"><p class="mb-1 text-sm font-semibold" id="p2-t">Enviando imagens…</p><div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="p2"><div class="h-full w-0 rounded-full bg-brand transition-all" id="p2-b"></div></div></div>
         <p class="muted text-xs">Não feche esta página até terminar. Se algo falhar, é seguro repetir a importação: duplicatas são ignoradas.</p>
-      </div>`);let z=(w,y,g,E)=>{let D=g?Math.round(y/g*100):100;s(`#${w}-b`).style.width=D+"%",s(`#${w}`).setAttribute("aria-valuenow",D),E&&(s(`#${w}-t`).textContent=E)},q=0;for(let w of N){let y=w.doc.questoes,g=w.val.prova.instituicao+" "+w.val.prova.ano+(w.val.prova.selecao?" \xB7 "+w.val.prova.selecao:"");for(let E=0;E<y.length;E+=tw){let D=y.slice(E,E+tw);try{let T=await ge("importarLote",{prova:w.doc.prova,questoes:D,offset:E});$.importadas+=T.importadas,(T.focosNovos||[]).forEach(b=>$.focosNovos.push(b)),T.duplicadas.forEach(b=>$.duplicadas.push({...b,arquivo:g})),T.erros.forEach(b=>$.erros.push({...b,arquivo:g})),T.avisos.forEach(b=>$.avisos.push({...b,arquivo:g})),T.paraUpload.forEach(b=>$.upload.set(b.questaoId+"|"+b.arquivo,{...b,arquivoJson:w.origem}))}catch(T){$.falhas.push({arquivo:g,de:E+1,ate:E+D.length,motivo:T.message})}q+=D.length,z("p1",q,K,`Enviando quest\xF5es\u2026 ${q}/${K}`)}}z("p1",K,K,`Quest\xF5es enviadas: ${K}/${K}`);let Q=[...$.upload.values()];if(Q.length){s("#bloco2").classList.remove("hidden");let w=0,y=async E=>{let D=o(A,E.arquivo);if(!D){$.imgFalta.push(E);return}try{let T=await D.obter(),b=D.mime;(window.CONFIG||{}).FIREBASE&&({buf:T,mime:b}=await YA(T,b));let fe=Math.max(1,Math.ceil(T.byteLength/jg)),Ne=crypto.randomUUID().replace(/-/g,"");for(let et=0;et<fe;et++){let Ie=T.slice(et*jg,(et+1)*jg);await ge("uploadImagem",{questaoId:E.questaoId,arquivo:E.arquivo,mime:b,dados:QA(Ie),parte:et,totalPartes:fe,uploadId:Ne})}$.imgOk++}catch(T){$.imgFalha.push({...E,motivo:T.message})}},g=Array.from({length:2},async()=>{for(;Q.length;)await y(Q.shift()),w++,z("p2",w,$.upload.size,`Enviando imagens\u2026 ${w}/${$.upload.size}`)});await Promise.all(g),z("p2",$.upload.size,$.upload.size,`Imagens processadas: ${$.upload.size}`)}n=!1,mfAtualizarTax(),d($,N)}function B(_){let A=[`Relat\xF3rio de importa\xE7\xE3o \u2014 ${new Date().toLocaleString("pt-BR")}`,"",`Quest\xF5es importadas: ${_.importadas}`,`Duplicadas ignoradas: ${_.duplicadas.length}`,`Erros de valida\xE7\xE3o: ${_.erros.length}`,`Blocos que falharam: ${_.falhas.length}`,`Imagens enviadas: ${_.imgOk}`,`Imagens n\xE3o encontradas: ${_.imgFalta.length}`,`Imagens com falha: ${_.imgFalha.length}`,`Focos novos adicionados: ${_.focosNovos.length}`,""];return _.focosNovos.forEach(N=>A.push(`FOCO NOVO: ${N.area} \u203A ${N.subarea} \u203A ${N.foco}`)),_.erros.forEach(N=>A.push(`ERRO  [${N.arquivo}] linha ${N.linha}${N.numero?` (quest\xE3o ${N.numero})`:""}: ${N.motivo}`)),_.falhas.forEach(N=>A.push(`FALHA [${N.arquivo}] linhas ${N.de}-${N.ate}: ${N.motivo}`)),_.duplicadas.forEach(N=>A.push(`DUPLICADA [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}) \u2014 j\xE1 existe como ${N.id}`)),_.avisos.forEach(N=>A.push(`AVISO [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}): ${N.motivo}`)),_.imgFalta.forEach(N=>A.push(`IMAGEM N\xC3O ENCONTRADA: ${N.arquivo} (quest\xE3o ${N.questaoId})`)),_.imgFalha.forEach(N=>A.push(`IMAGEM COM FALHA: ${N.arquivo} (quest\xE3o ${N.questaoId}): ${N.motivo}`)),A.join(`
+      </div>`);let z=(w,y,g,E)=>{let D=g?Math.round(y/g*100):100;s(`#${w}-b`).style.width=D+"%",s(`#${w}`).setAttribute("aria-valuenow",D),E&&(s(`#${w}-t`).textContent=E)},q=0;for(let w of N){let y=w.doc.questoes,g=w.val.prova.instituicao+" "+mfAno(w.val.prova)+(w.val.prova.selecao?" \xB7 "+w.val.prova.selecao:"");for(let E=0;E<y.length;E+=tw){let D=y.slice(E,E+tw);try{let T=await ge("importarLote",{prova:w.doc.prova,questoes:D,offset:E});$.importadas+=T.importadas,(T.focosNovos||[]).forEach(b=>$.focosNovos.push(b)),T.duplicadas.forEach(b=>$.duplicadas.push({...b,arquivo:g})),T.erros.forEach(b=>$.erros.push({...b,arquivo:g})),T.avisos.forEach(b=>$.avisos.push({...b,arquivo:g})),T.paraUpload.forEach(b=>$.upload.set(b.questaoId+"|"+b.arquivo,{...b,arquivoJson:w.origem}))}catch(T){$.falhas.push({arquivo:g,de:E+1,ate:E+D.length,motivo:T.message})}q+=D.length,z("p1",q,K,`Enviando quest\xF5es\u2026 ${q}/${K}`)}}z("p1",K,K,`Quest\xF5es enviadas: ${K}/${K}`);let Q=[...$.upload.values()];if(Q.length){s("#bloco2").classList.remove("hidden");let w=0,y=async E=>{let D=o(A,E.arquivo);if(!D){$.imgFalta.push(E);return}try{let T=await D.obter(),b=D.mime;(window.CONFIG||{}).FIREBASE&&({buf:T,mime:b}=await YA(T,b));let fe=Math.max(1,Math.ceil(T.byteLength/jg)),Ne=crypto.randomUUID().replace(/-/g,"");for(let et=0;et<fe;et++){let Ie=T.slice(et*jg,(et+1)*jg);await ge("uploadImagem",{questaoId:E.questaoId,arquivo:E.arquivo,mime:b,dados:QA(Ie),parte:et,totalPartes:fe,uploadId:Ne})}$.imgOk++}catch(T){$.imgFalha.push({...E,motivo:T.message})}},g=Array.from({length:2},async()=>{for(;Q.length;)await y(Q.shift()),w++,z("p2",w,$.upload.size,`Enviando imagens\u2026 ${w}/${$.upload.size}`)});await Promise.all(g),z("p2",$.upload.size,$.upload.size,`Imagens processadas: ${$.upload.size}`)}n=!1,mfAtualizarTax(),d($,N)}function B(_){let A=[`Relat\xF3rio de importa\xE7\xE3o \u2014 ${new Date().toLocaleString("pt-BR")}`,"",`Quest\xF5es importadas: ${_.importadas}`,`Duplicadas ignoradas: ${_.duplicadas.length}`,`Erros de valida\xE7\xE3o: ${_.erros.length}`,`Blocos que falharam: ${_.falhas.length}`,`Imagens enviadas: ${_.imgOk}`,`Imagens n\xE3o encontradas: ${_.imgFalta.length}`,`Imagens com falha: ${_.imgFalha.length}`,`Focos novos adicionados: ${_.focosNovos.length}`,""];return _.focosNovos.forEach(N=>A.push(`FOCO NOVO: ${N.area} \u203A ${N.subarea} \u203A ${N.foco}`)),_.erros.forEach(N=>A.push(`ERRO  [${N.arquivo}] linha ${N.linha}${N.numero?` (quest\xE3o ${N.numero})`:""}: ${N.motivo}`)),_.falhas.forEach(N=>A.push(`FALHA [${N.arquivo}] linhas ${N.de}-${N.ate}: ${N.motivo}`)),_.duplicadas.forEach(N=>A.push(`DUPLICADA [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}) \u2014 j\xE1 existe como ${N.id}`)),_.avisos.forEach(N=>A.push(`AVISO [${N.arquivo}] linha ${N.linha} (quest\xE3o ${N.numero}): ${N.motivo}`)),_.imgFalta.forEach(N=>A.push(`IMAGEM N\xC3O ENCONTRADA: ${N.arquivo} (quest\xE3o ${N.questaoId})`)),_.imgFalha.forEach(N=>A.push(`IMAGEM COM FALHA: ${N.arquivo} (quest\xE3o ${N.questaoId}): ${N.motivo}`)),A.join(`
 `)}function d(_,A){let N=!_.erros.length&&!_.falhas.length&&!_.imgFalta.length&&!_.imgFalha.length,K=($,z,q)=>z.length?O`<details class="mt-3"><summary class="cursor-pointer text-sm font-medium ${q}">${$} (${z.length})</summary><ul class="mt-2 max-h-56 list-disc space-y-1 overflow-auto pl-5 text-xs">${z.slice(0,300).map(Q=>O`<li>${Q}</li>`)}</ul></details>`:"";i.innerHTML=String(O`
     <section class="card" aria-labelledby="t-rel">
       <h2 id="t-rel" class="flex items-center gap-2 text-base font-semibold"><i data-lucide="${N?"circle-check":"triangle-alert"}" class="h-5 w-5 ${N?"text-emerald-600":"text-amber-600"}" aria-hidden="true"></i>Importação concluída${N?"":" com pend\xEAncias"}</h2>
@@ -3761,8 +4056,9 @@ ${a}</section>
   </section>
 
   <section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Exportar focos</h2></div>${mfBotoesExportar()}</section>
+  <section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Exportar provas</h2><p class="muted mt-1 text-xs">Seleção, nome completo e ano (ou turma) de todas as provas.</p></div>${mfBotoesExportarProvas()}</section>
   ${mfAdmin()?O`<section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Backup do banco</h2><p class="muted mt-1 text-xs">Todas as provas em JSON, com as imagens em <code>imagens/</code>. O mesmo arquivo pode ser reimportado.</p></div><button type="button" class="btn btn-outline" data-exportar-banco><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Exportar banco (.zip)</button></section>`:""}
-  ${mfAdmin()?O`<section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Focos e classificação</h2></div><a href="#/taxonomia" class="btn btn-outline"><i data-lucide="tag" class="h-4 w-4" aria-hidden="true"></i>Abrir</a></section>`:""}
+  ${mfAdmin()?O`<section class="card mt-5 flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-sm font-semibold">Focos e classificação</h2></div><div class="flex flex-wrap gap-2"><a href="#/reclassificar" class="btn btn-outline"><i data-lucide="list-checks" class="h-4 w-4" aria-hidden="true"></i>Reclassificar</a><a href="#/taxonomia" class="btn btn-outline"><i data-lucide="tag" class="h-4 w-4" aria-hidden="true"></i>Abrir</a></div></section>`:""}
   <section class="card mt-5">
     <h2 class="text-sm font-semibold">Nomes das provas</h2>
 
@@ -3775,12 +4071,12 @@ ${a}</section>
   </section>
   <p class="muted mt-6 text-center text-xs">Vers\xE3o 2026.11.14</p>`);let n=r.querySelector("#app-corpo");mfLigarExportacao(r);function s(){let u=matchMedia("(display-mode: standalone)").matches||navigator.standalone,l=/iphone|ipad|ipod/i.test(navigator.userAgent);u?n.innerHTML=String(O`<p class="muted text-sm">Você já está usando o aplicativo instalado. ✓</p>`):window.__instalar?n.innerHTML=String(O`<button type="button" class="btn btn-primary mt-3" id="b-instalar">Instalar aplicativo</button>`):l?n.innerHTML=String(O`<p class="muted text-sm">No iPhone/iPad, abra no <strong>Safari</strong>, toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.</p>`):n.innerHTML=String(O`<p class="muted text-sm">Pelo menu do navegador (⋮), escolha <strong>Instalar aplicativo</strong> ou <strong>Adicionar à tela inicial</strong>.</p>`);let B=n.querySelector("#b-instalar");B&&B.addEventListener("click",async()=>{let d=window.__instalar;d&&(d.prompt(),await d.userChoice.catch(()=>{}),window.__instalar=null,s())})}s(),document.addEventListener("bq:pode-instalar",s);let i=r.querySelector("#provas");async function a(){try{let u=await ge("listarQuestoes",{facetas:!0,tamanho:1}),l=u.facetas&&u.facetas.provas||[];i.innerHTML=String(l.length?O`${l.map(B=>O`
         <form data-prova="${B.id}" class="flex flex-wrap items-end gap-2">
-          <div class="min-w-[12rem] flex-1"><label class="label">Nome da prova <span class="muted font-normal">(${B.total} ${B.total===1?"quest\xE3o":"quest\xF5es"})</span></label><input name="inst" class="input" maxlength="120" value="${B.instituicao}" required></div>
-          <div class="w-24"><label class="label">Ano</label><input name="ano" class="input" inputmode="numeric" maxlength="4" value="${B.ano}" required></div>
-          <div class="w-40"><label class="label">Sele\xE7\xE3o</label><select class="input" data-selecao="${B.id}"><option value="">Sem sele\xE7\xE3o</option>${(u.facetas.selecoes||[]).map(x=>O`<option ${x===B.selecao?ot("selected"):""}>${x}</option>`)}</select></div>
-          <button type="submit" class="btn btn-outline">Salvar</button>
-          <button type="button" class="btn btn-ghost px-2 text-rose-700 dark:text-rose-400" data-excluir-prova="${B.id}" data-nome="${B.instituicao} ${B.ano}${B.rotulo?" \xB7 "+B.rotulo:""}" aria-label="Excluir a prova ${B.instituicao} ${B.ano}${B.rotulo?" \xB7 "+B.rotulo:""}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
-        </form>`)}`:O`<p class="muted text-sm">Nenhuma prova importada ainda.</p>`),jn()}catch(u){i.innerHTML=String(O`<p class="text-sm text-rose-600">${u.message}</p>`)}}i.addEventListener("change",async u=>{let l=u.target.closest("[data-selecao]");if(!l)return;try{await ge("definirSelecao",{provaId:l.dataset.selecao,selecao:l.value}),be("Sele\xE7\xE3o salva.","ok",1800)}catch(B){be(B.message,"erro")}}),i.addEventListener("click",u=>{let l=u.target.closest("[data-excluir-prova]");l&&mfExcluirProva(l.dataset.excluirProva,l.dataset.nome,a)}),i.addEventListener("submit",async u=>{u.preventDefault();let l=u.target,B=l.querySelector("button");B.disabled=!0;try{let d=await ge("renomearProva",{provaId:l.dataset.prova,instituicao:l.inst.value.trim(),ano:Number(l.ano.value)});be(`Prova renomeada em ${d.questoes} ${d.questoes===1?"quest\xE3o":"quest\xF5es"}.`,"ok"),await a()}catch(d){be(d.message,"erro",6e3),B.disabled=!1}}),a(),r.querySelector("#p-tema").value=e.tema||"auto";async function o(u){try{Ee.prefs=await ge("salvarPrefs",{prefs:u}),Ys(),be("Prefer\xEAncia salva.","ok",1800)}catch(l){be(l.message,"erro")}}r.querySelector("#p-foco").addEventListener("change",u=>o({ocultarFoco:u.target.checked})),r.querySelector("#p-area").addEventListener("change",u=>o({ocultarArea:u.target.checked})),r.querySelector("#p-tema").addEventListener("change",u=>o({tema:u.target.value})),r.querySelector("#p-fonte").addEventListener("change",u=>o({fonte:u.target.value})),r.querySelector("#b-sair").addEventListener("click",()=>{Ki(),location.hash="#/login",location.reload()})}crypto.randomUUID||(crypto.randomUUID=()=>("10000000-1000-4000-8000"+-1e11).replace(/[018]/g,r=>(r^crypto.getRandomValues(new Uint8Array(1))[0]&15>>r/4).toString(16)));Jv();document.addEventListener("bq:erro-nuvem",r=>be("Falha ao salvar na nuvem: "+(r.detail&&r.detail.message||"verifique as regras do Firestore e a conex\xE3o."),"erro",8e3));var ZA={"mf/aulas":mfVAulas,"mf/caderno":mfVCaderno,"mf/tax":mfVTax,"./views/login.js":Pg,"./views/dashboard.js":Fg,"./views/questoes.js":Lg,"./views/player.js":Gg,"./views/trilhas.js":qg,"./views/simulados.js":Hg,"./views/relatorio.js":Ug,"./views/importar.js":$g,"./views/ajustes.js":Jg},e1=[{re:/^\/login$/,mod:"./views/login.js",publica:!0,nav:null},{re:/^\/$/,mod:"./views/dashboard.js",nav:"inicio"},{re:/^\/questoes$/,mod:"./views/questoes.js",nav:"questoes"},{re:/^\/favoritas$/,mod:"./views/questoes.js",nav:"favoritas",opcoes:{modo:"favoritas"}},{re:/^\/q\/([^/]+)$/,mod:"./views/player.js",nav:"questoes",player:!0,params:["id"]},{re:/^\/sessao\/([^/]+)$/,mod:"./views/player.js",nav:"simulados",player:!0,params:["sessaoId"]},{re:/^\/trilhas$/,mod:"./views/trilhas.js",nav:"trilhas"},{re:/^\/simulados$/,mod:"./views/simulados.js",nav:"simulados"},{re:/^\/relatorio\/([^/]+)$/,mod:"./views/relatorio.js",nav:"simulados",params:["sessaoId"]},{re:/^\/importar$/,mod:"./views/importar.js",nav:"importar"},{re:/^\/ajustes$/,mod:"./views/ajustes.js",nav:"ajustes"},{re:/^\/aulas$/,mod:"mf/aulas",nav:"aulas"},{re:/^\/caderno$/,mod:"mf/caderno",nav:"focos"},{re:/^\/taxonomia$/,mod:"mf/tax",nav:"ajustes"}],nw=[{id:"inicio",href:"#/",icone:"layout-dashboard",rotulo:"In\xEDcio"},{id:"questoes",href:"#/questoes",icone:"list-checks",rotulo:"Quest\xF5es"},{id:"trilhas",href:"#/trilhas",icone:"route",rotulo:"Trilhas"},{id:"simulados",href:"#/simulados",icone:"timer",rotulo:"Simulados"},{id:"aulas",href:"#/aulas",icone:"graduation-cap",rotulo:"Aulas"},{id:"focos",href:"#/caderno",icone:"bookmark",rotulo:"Focos"},{id:"favoritas",href:"#/favoritas",icone:"heart",rotulo:"Favoritas"}],WB=null,cc=0;function t1(){let r=location.hash.replace(/^#/,"")||"/",[e,t]=r.split("?");return{caminho:decodeURI(e)||"/",query:Object.fromEntries(new URLSearchParams(t||""))}}function lc(r){location.hash=r}function YB(){let r=!!Ee.usuario;document.getElementById("shell").innerHTML=String(O`
+          <div class="min-w-[12rem] flex-1"><label class="label">Nome da prova <span class="muted font-normal">(${B.total} ${B.total===1?"quest\xE3o":"quest\xF5es"})</span></label><input name="inst" class="input" maxlength="120" value="${B.instituicao}" required ${mfAdmin()?"":ot("readonly")}></div>
+          <div class="w-24"><label class="label">${B.turma?"Turma":"Ano"}</label><input name="ano" class="input" inputmode="numeric" maxlength="6" value="${mfAno(B)}" required ${mfAdmin()&&!B.turma?"":ot("readonly")}></div>
+          <div class="w-40"><label class="label">Sele\xE7\xE3o</label><select class="input" data-selecao="${B.id}" ${mfAdmin()?"":ot("disabled")}><option value="">Sem sele\xE7\xE3o</option>${(u.facetas.selecoes||[]).map(x=>O`<option ${x===B.selecao?ot("selected"):""}>${x}</option>`)}</select></div>
+          ${mfAdmin()?O`<button type="submit" class="btn btn-outline">Salvar</button>`:""}
+          <button type="button" class="btn btn-ghost px-2 text-rose-700 dark:text-rose-400" data-excluir-prova="${B.id}" data-nome="${B.instituicao} ${mfAno(B)}${B.rotulo?" \xB7 "+B.rotulo:""}" aria-label="Excluir a prova ${B.instituicao} ${mfAno(B)}${B.rotulo?" \xB7 "+B.rotulo:""}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
+        </form>`)}`:O`<p class="muted text-sm">Nenhuma prova importada ainda.</p>`),jn()}catch(u){i.innerHTML=String(O`<p class="text-sm text-rose-600">${u.message}</p>`)}}i.addEventListener("change",async u=>{let l=u.target.closest("[data-selecao]");if(!l)return;try{await ge("definirSelecao",{provaId:l.dataset.selecao,selecao:l.value}),be("Sele\xE7\xE3o salva.","ok",1800)}catch(B){be(B.message,"erro")}}),i.addEventListener("click",u=>{let l=u.target.closest("[data-excluir-prova]");l&&mfExcluirProva(l.dataset.excluirProva,l.dataset.nome,a)}),i.addEventListener("submit",async u=>{u.preventDefault();let l=u.target,B=l.querySelector("button");B.disabled=!0;try{let d=await ge("renomearProva",{provaId:l.dataset.prova,instituicao:l.inst.value.trim(),ano:/^\d{4}$/.test(l.ano.value)?Number(l.ano.value):void 0});be(`Prova renomeada em ${d.questoes} ${d.questoes===1?"quest\xE3o":"quest\xF5es"}.`,"ok"),await a()}catch(d){be(d.message,"erro",6e3),B.disabled=!1}}),a(),r.querySelector("#p-tema").value=e.tema||"auto";async function o(u){try{Ee.prefs=await ge("salvarPrefs",{prefs:u}),Ys(),be("Prefer\xEAncia salva.","ok",1800)}catch(l){be(l.message,"erro")}}r.querySelector("#p-foco").addEventListener("change",u=>o({ocultarFoco:u.target.checked})),r.querySelector("#p-area").addEventListener("change",u=>o({ocultarArea:u.target.checked})),r.querySelector("#p-tema").addEventListener("change",u=>o({tema:u.target.value})),r.querySelector("#p-fonte").addEventListener("change",u=>o({fonte:u.target.value})),r.querySelector("#b-sair").addEventListener("click",()=>{Ki(),location.hash="#/login",location.reload()})}crypto.randomUUID||(crypto.randomUUID=()=>("10000000-1000-4000-8000"+-1e11).replace(/[018]/g,r=>(r^crypto.getRandomValues(new Uint8Array(1))[0]&15>>r/4).toString(16)));Jv();document.addEventListener("bq:erro-nuvem",r=>be("Falha ao salvar na nuvem: "+(r.detail&&r.detail.message||"verifique as regras do Firestore e a conex\xE3o."),"erro",8e3));var ZA={"mf/reclass":mfVReclass,"mf/provanova":mfVNovaProva,"mf/aulas":mfVAulas,"mf/caderno":mfVCaderno,"mf/tax":mfVTax,"./views/login.js":Pg,"./views/dashboard.js":Fg,"./views/questoes.js":Lg,"./views/player.js":Gg,"./views/trilhas.js":qg,"./views/simulados.js":Hg,"./views/relatorio.js":Ug,"./views/importar.js":$g,"./views/ajustes.js":Jg},e1=[{re:/^\/login$/,mod:"./views/login.js",publica:!0,nav:null},{re:/^\/$/,mod:"./views/dashboard.js",nav:"inicio"},{re:/^\/questoes$/,mod:"./views/questoes.js",nav:"questoes"},{re:/^\/favoritas$/,mod:"./views/questoes.js",nav:"favoritas",opcoes:{modo:"favoritas"}},{re:/^\/q\/([^/]+)$/,mod:"./views/player.js",nav:"questoes",player:!0,params:["id"]},{re:/^\/sessao\/([^/]+)$/,mod:"./views/player.js",nav:"simulados",player:!0,params:["sessaoId"]},{re:/^\/trilhas$/,mod:"./views/trilhas.js",nav:"trilhas"},{re:/^\/simulados$/,mod:"./views/simulados.js",nav:"simulados"},{re:/^\/relatorio\/([^/]+)$/,mod:"./views/relatorio.js",nav:"simulados",params:["sessaoId"]},{re:/^\/importar$/,mod:"./views/importar.js",nav:"importar"},{re:/^\/ajustes$/,mod:"./views/ajustes.js",nav:"ajustes"},{re:/^\/aulas$/,mod:"mf/aulas",nav:"aulas"},{re:/^\/caderno$/,mod:"mf/caderno",nav:"focos"},{re:/^\/reclassificar$/,mod:"mf/reclass",nav:"ajustes"},{re:/^\/prova-nova$/,mod:"mf/provanova",nav:"importar"},{re:/^\/taxonomia$/,mod:"mf/tax",nav:"ajustes"}],nw=[{id:"inicio",href:"#/",icone:"layout-dashboard",rotulo:"In\xEDcio"},{id:"questoes",href:"#/questoes",icone:"list-checks",rotulo:"Quest\xF5es"},{id:"trilhas",href:"#/trilhas",icone:"route",rotulo:"Trilhas"},{id:"simulados",href:"#/simulados",icone:"timer",rotulo:"Simulados"},{id:"aulas",href:"#/aulas",icone:"graduation-cap",rotulo:"Aulas"},{id:"focos",href:"#/caderno",icone:"bookmark",rotulo:"Focos"},{id:"favoritas",href:"#/favoritas",icone:"heart",rotulo:"Favoritas"}],WB=null,cc=0;function t1(){let r=location.hash.replace(/^#/,"")||"/",[e,t]=r.split("?");return{caminho:decodeURI(e)||"/",query:Object.fromEntries(new URLSearchParams(t||""))}}function lc(r){location.hash=r}function YB(){let r=!!Ee.usuario;document.getElementById("shell").innerHTML=String(O`
   <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
     <div class="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
       <a href="#/" class="flex items-center gap-2 font-semibold tracking-tight"><img src="logo-peixe.png" alt="" width="28" height="28" class="h-7 w-7 dark:invert"><span>MedFisher</span></a>
