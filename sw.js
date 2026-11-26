@@ -3,10 +3,10 @@
 // - Bibliotecas e fontes de CDN: usa o cache e atualiza em segundo plano.
 // - Dados (Firestore) NÃO passam por aqui: o próprio Firebase guarda o banco no aparelho.
 // Para forçar todos a atualizarem, mude o número de VERSAO.
-const VERSAO = 'v25';
+const VERSAO = 'v26';
 const CACHE = 'bq-' + VERSAO;
-const BASICOS = ['./', 'index.html', 'manifest.webmanifest', 'favicon.svg', 'favicon.ico', 'logo-peixe.png', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', ...['montserrat', 'poppins', 'crimson-pro'].flatMap(f => [400, 500, 600, 700].map(p => `fonts/${f}-latin-${p}-normal.woff2`))];
-const CDNS = ['cdn.tailwindcss.com', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+const BASICOS = ['./', 'index.html', 'tailwind.css', 'manifest.webmanifest', 'favicon.svg', 'favicon.ico', 'logo-peixe.png', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', ...['montserrat', 'poppins', 'crimson-pro'].flatMap(f => [400, 500, 600, 700].map(p => `fonts/${f}-latin-${p}-normal.woff2`))];
+const CDNS = ['cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(BASICOS.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));

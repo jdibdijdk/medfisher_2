@@ -1,0 +1,7 @@
+{
+  "name": "medfisher-css",
+  "private": true,
+  "description": "Compila o tailwind.css do MedFisher (veja LEIA-ME.md).",
+  "scripts": { "build": "tailwindcss -c tailwind.config.js -i entrada.css -o ../../tailwind.css --minify" },
+  "devDependencies": { "tailwindcss": "3.4.17" }
+}

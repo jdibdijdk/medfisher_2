@@ -33,129 +33,14 @@
       } catch (e) {}
     })();
   </script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: { sans: ['Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
-          colors: { brand: { DEFAULT: '#1E3A6B', 700: '#16294D', 50: '#EAF0FA' } }
-        }
-      }
-    };
-  </script>
+  <link rel="stylesheet" href="tailwind.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
-  <style type="text/tailwindcss">
-    @layer components {
-      .card { @apply rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900; }
-      .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 dark:focus-visible:ring-offset-slate-950; }
-      .btn-primary { @apply bg-brand text-white hover:bg-brand-700; }
-      .btn-outline { @apply border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800; }
-      .btn-ghost { @apply text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800; }
-      .btn-sm { @apply px-3 py-1.5 text-xs; }
-      .input { @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 dark:border-slate-700 dark:bg-slate-900; }
-      .label { @apply mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400; }
-      .muted { @apply text-slate-600 dark:text-slate-400; }
-      .h1 { @apply text-xl font-semibold tracking-tight sm:text-2xl; }
-      .h2 { @apply text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400; }
-    }
-    @font-face { font-family: Montserrat; font-weight: 400; font-display: block; src: url(fonts/montserrat-latin-400-normal.woff2) format("woff2"); }
-    @font-face { font-family: Montserrat; font-weight: 500; font-display: block; src: url(fonts/montserrat-latin-500-normal.woff2) format("woff2"); }
-    @font-face { font-family: Montserrat; font-weight: 600; font-display: block; src: url(fonts/montserrat-latin-600-normal.woff2) format("woff2"); }
-    @font-face { font-family: Montserrat; font-weight: 700; font-display: block; src: url(fonts/montserrat-latin-700-normal.woff2) format("woff2"); }
-    @font-face { font-family: Poppins; font-weight: 400; font-display: block; src: url(fonts/poppins-latin-400-normal.woff2) format("woff2"); }
-    @font-face { font-family: Poppins; font-weight: 500; font-display: block; src: url(fonts/poppins-latin-500-normal.woff2) format("woff2"); }
-    @font-face { font-family: Poppins; font-weight: 600; font-display: block; src: url(fonts/poppins-latin-600-normal.woff2) format("woff2"); }
-    @font-face { font-family: Poppins; font-weight: 700; font-display: block; src: url(fonts/poppins-latin-700-normal.woff2) format("woff2"); }
-    @font-face { font-family: "Crimson Pro"; font-weight: 400; font-display: block; src: url(fonts/crimson-pro-latin-400-normal.woff2) format("woff2"); }
-    @font-face { font-family: "Crimson Pro"; font-weight: 500; font-display: block; src: url(fonts/crimson-pro-latin-500-normal.woff2) format("woff2"); }
-    @font-face { font-family: "Crimson Pro"; font-weight: 600; font-display: block; src: url(fonts/crimson-pro-latin-600-normal.woff2) format("woff2"); }
-    @font-face { font-family: "Crimson Pro"; font-weight: 700; font-display: block; src: url(fonts/crimson-pro-latin-700-normal.woff2) format("woff2"); }
-    body { font-family: var(--mf-fonte, Montserrat, ui-sans-serif, system-ui, sans-serif) !important; }
-    /* Fundo em degradê pastel, na cor da área, enquanto se resolve a questão. */
-    body[data-rota="player"]::before { content: ""; position: fixed; inset: 0 0 auto 0; height: 70vh; z-index: -1; pointer-events: none;
-      background: linear-gradient(180deg, var(--g1, #D3E4F7) 0%, color-mix(in srgb, var(--g1, #D3E4F7) 45%, white) 48%, rgb(255 255 255 / 0) 100%); transition: background .4s; }
-    .dark body[data-rota="player"]::before { background: linear-gradient(180deg, color-mix(in srgb, var(--g1, #D3E4F7) 20%, #0f172a) 0%, rgb(15 23 42 / 0) 100%); }
-    input.mf-sw { appearance: none; -webkit-appearance: none; flex: none; width: 2.5rem; height: 1.5rem; border-radius: 9999px; background: #cbd5e1; position: relative; cursor: pointer; transition: background .15s; }
-    input.mf-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 1.25rem; height: 1.25rem; border-radius: 9999px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: transform .15s; }
-    input.mf-sw:checked { background: #1E3A6B; }
-    input.mf-sw:checked::after { transform: translateX(1rem); }
-    input.mf-sw:disabled { opacity: .5; cursor: not-allowed; }
-    input.mf-sw:focus-visible { outline: 2px solid #1E3A6B; outline-offset: 2px; }
-    .dark input.mf-sw { background: #475569; }
-    .dark input.mf-sw:checked { background: #5B7FC0; }
-    .mf-chev { transition: transform .15s; }
-    details[data-k][open] > summary .mf-chev { transform: rotate(90deg); }
-    /* Ajustes só para telas de celular (o desktop não muda). */
-    @media (max-width: 639px) {
-      .grid > * { min-width: 0; }
-      /* Player de aula: tela cheia, mídia de ponta a ponta. */
-      dialog.mf-player { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
-      dialog.mf-player[open] { display: flex; }
-      dialog.mf-player > form { display: flex; flex: 1; flex-direction: column; gap: .75rem; min-height: 0; width: 100%; padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom)); }
-      dialog.mf-player > form > * { margin: 0; }
-      dialog.mf-player > form > div.space-y-3 { flex: 1; min-height: 0; overflow-y: auto; }
-      dialog.mf-player [data-aula-box] { display: flex; flex-direction: column; gap: .75rem; min-height: 100%; }
-      dialog.mf-player [data-aula-box] > * { margin: 0; }
-      dialog.mf-player [data-aula-box] > video, dialog.mf-player [data-aula-box] > iframe { width: calc(100% + 2rem); max-width: none; margin-left: -1rem; margin-right: -1rem; border-radius: 0; border-left: 0; border-right: 0; }
-      dialog.mf-player [data-aula-box] > video, dialog.mf-player [data-aula-box] > iframe.aspect-video { aspect-ratio: 16 / 9; height: auto; }
-      dialog.mf-player [data-aula-box] > iframe:not(.aspect-video) { flex: 1 1 auto; height: auto; min-height: 55dvh; }
-      details[data-k] > summary { list-style: none; }
-      details[data-k] > summary::-webkit-details-marker { display: none; }
-      details[data-k]:not(.mf-ic) > summary::before { content: "›"; flex: none; display: inline-block; width: .9rem; margin-right: .35rem; text-align: center; font-weight: 700; color: #94a3b8; transition: transform .15s; }
-      details[data-k]:not(.mf-ic)[open] > summary::before { transform: rotate(90deg); }
-      details[data-k] > summary:not(.flex) { display: flex; align-items: center; gap: .25rem; }
-      details[data-k]:not(.mf-ic) > summary > :first-child { margin-right: auto; flex: 1 1 12rem; min-width: 0; }
-      details[data-k] > summary > h2, details[data-k] > summary > h3 { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
-    }
-    .chip { display: inline-flex; align-items: center; gap: .375rem; border-radius: 9999px; padding: .25rem .75rem; font-size: .75rem; font-weight: 600; line-height: 1.1rem; background: var(--bg); color: var(--fg); white-space: nowrap; }
-    .chip svg { width: .95rem; height: .95rem; stroke-width: 2; flex: none; }
-    .dark .chip { background: color-mix(in srgb, var(--fg) 24%, transparent); color: color-mix(in srgb, var(--fg) 40%, white); }
-    button.chip { cursor: pointer; border: 1.5px solid transparent; }
-    button.chip[aria-pressed="true"] { border-color: var(--fg); }
-    .texto-questao { white-space: pre-line; overflow-wrap: anywhere; text-align: justify; hyphens: auto; }
-    #q .texto-questao { font-size: var(--q-fs, 15px); line-height: 1.6; }
-    dialog::backdrop { background: rgb(15 23 42 / .45); }
-    dialog { margin: auto; }
-    mark.hl { background: color-mix(in srgb, var(--c) 55%, transparent); color: inherit; border-radius: .2rem; padding: 0 .05em; }
-    .dark mark.hl { background: color-mix(in srgb, var(--c) 45%, transparent); }
-    /* ── Animações (desligadas com prefers-reduced-motion) ── */
-    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-    @keyframes slideIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
-    @keyframes popIn { 0% { transform: scale(.96); opacity: 0; } 100% { transform: none; opacity: 1; } }
-    @keyframes heart { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
-    @keyframes shimmer { 100% { transform: translateX(100%); } }
-    @keyframes ring { from { stroke-dasharray: 0 999; } }
-    .view-in { animation: fadeUp .28s ease-out backwards; }
-    .q-enter { animation: slideIn .26s cubic-bezier(.2,.8,.2,1) backwards; }
-    .cards-in [data-card] { animation: fadeUp .35s cubic-bezier(.2,.8,.2,1) both; }
-    .cards-in [data-card]:nth-child(2) { animation-delay: .06s; } .cards-in [data-card]:nth-child(3) { animation-delay: .12s; }
-    .cards-in [data-card]:nth-child(4) { animation-delay: .18s; } .cards-in [data-card]:nth-child(5) { animation-delay: .24s; }
-    .cards-in [data-card] circle[stroke-dasharray] { animation: ring .8s .2s ease-out both; }
-    .pop svg, .pop { animation: heart .35s ease-out; }
-    dialog[open] { animation: popIn .18s ease-out; }
-    dialog[open]::backdrop { animation: fadeUp .18s ease-out; }
-    button, a.btn, [data-alt], [data-card] { transition: background-color .15s, border-color .15s, color .15s, transform .12s, box-shadow .15s, opacity .15s; }
-    button:active:not(:disabled), [data-alt]:active { transform: scale(.97); }
-    .card { transition: box-shadow .2s, transform .2s; }
-    a.card:hover, button.card:hover { box-shadow: 0 6px 20px -8px rgb(15 23 42 / .25); transform: translateY(-2px); }
-    #toasts > * { animation: fadeUp .22s ease-out backwards; }
-    mark.hl { transition: background .2s; }
-    .animate-pulse, .skel { position: relative; overflow: hidden; }
-    body { overflow-x: clip; }
-    .skip { position: absolute; left: -999px; }
-    .skip:focus { left: 1rem; top: 1rem; z-index: 100; }
-    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-    body[data-rota="player"] #bottom-nav { display: none; }
-    body[data-rota="player"] main { padding-bottom: 7rem; }
-  </style>
 </head>
 <body class="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
   <a href="#view" class="skip btn btn-primary">Pular para o conteúdo</a>
   <div id="shell"></div>
-  <main id="view" tabindex="-1" class="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 outline-none md:pb-12"></main>
-  <div id="toasts" class="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex flex-col items-center gap-2 px-4 md:bottom-6" role="status" aria-live="polite"></div>
+  <main id="view" tabindex="-1" class="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 outline-none lg:pb-12"></main>
+  <div id="toasts" class="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex flex-col items-center gap-2 px-4 lg:bottom-6" role="status" aria-live="polite"></div>
   <script>
     // ▼▼ CONFIGURE AQUI: use FIREBASE (cole o firebaseConfig do seu projeto) OU API_URL + TOKEN do Apps Script ▼▼
     window.CONFIG = {
@@ -401,6 +286,8 @@ function iguais_(a, b) {
 var ACOES = {
   login: login_,
   entrar: entrar_,
+  conviteInfo: conviteInfo_,
+  conviteConta: conviteConta_,
   salvarPerfil: salvarPerfil_,
   usuariosAdmin: usuariosAdmin_,
   salvarUsuario: salvarUsuario_,
@@ -2329,7 +2216,7 @@ function mrAtualizarGrupo_(u, p) {
       if (p.periodo !== undefined) r[3] = Math.max(0, Math.min(12, Math.floor(Number(p.periodo)) || 0));
       if (p.publico !== undefined) r[5] = p.publico ? 1 : 0;
       if (p.convidam !== undefined) r[6] = p.convidam ? 1 : 0;
-      if (p.foto !== undefined) r[7] = str_(p.foto).slice(0, 200);
+      if (p.foto !== undefined) r[7] = fotoVal_(p.foto);
       sh_('MR_Grupos').getRange(i + 2, 1, 1, r.length).setValues([r]);
       return { ok: true };
     }
@@ -2675,6 +2562,51 @@ function conferirSessaoAdmin_(p) {
   if (!t || sessoesAdmin_().indexOf(t) < 0) throw erro_('Sessão do administrador expirada. Entre de novo.', 'auth');
 }
 
+/** Período do curso a partir da turma (ano + semestre de entrada): 2023B em 2º semestre de 2026 → 7. */
+function periodoDe_(turma) {
+  var m = /^(\\d{4})([AB])$/.exec(String(turma || ''));
+  if (!m) return 0;
+  var agora = new Date(Date.now() - 3 * 3600000), sem = agora.getUTCMonth() < 6 ? 1 : 2;
+  var n = (agora.getUTCFullYear() - Number(m[1])) * 2 + (sem - (m[2] === 'A' ? 1 : 2)) + 1;
+  return Math.max(0, Math.min(12, n));
+}
+
+/** Dados públicos de um convite do MedRats (a pessoa ainda pode não ter conta). */
+function conviteInfo_(u, p) {
+  var cod = str_(p.codigo), g = mrGrupos_().filter(function (x) { return x.codigo === cod; })[0];
+  if (!g) throw erro_('Convite inválido ou expirado.');
+  var reg = usuariosReg_(), vagas = 0;
+  Object.keys(reg).forEach(function (k) { if (!reg[k].login && k !== USUARIO_ADMIN && k !== ID_XAVIER) vagas++; });
+  return { nome: g.nome, foto: g.foto, turma: g.turma, periodo: g.periodo, membros: mrMembrosDoGrupo_(g.id).length, vagas: vagas };
+}
+
+/** Quem recebeu um convite e não tem conta cria a sua: o nome vira o usuário, ocupa uma vaga livre e entra no grupo. */
+function conviteConta_(u, p) {
+  var cod = str_(p.codigo), g = mrGrupos_().filter(function (x) { return x.codigo === cod; })[0];
+  if (!g) throw erro_('Convite inválido ou expirado.');
+  var nome = str_(p.nome).replace(/\\s+/g, ' ').slice(0, 60), login = normLogin_(nome);
+  if (login.length < 2) throw erro_('Digite seu nome (ao menos 2 letras ou números).');
+  var ano = Math.floor(Number(p.ano)), sem = str_(p.semestre), turma = normTurma_(String(ano) + sem);
+  if (!turma || ano > new Date().getUTCFullYear() + 1) throw erro_('Informe o ano e o semestre em que você entrou, como 2023 e 2º semestre.');
+  if (mrMembrosDoGrupo_(g.id).length >= 30) throw erro_('Este grupo já está cheio (30 pessoas).');
+  var id = comLock_(function () {
+    var reg = JSON.parse(JSON.stringify(usuariosReg_())), livre = null;
+    Object.keys(reg).forEach(function (k) { if (reg[k].login && normLogin_(reg[k].login) === login) throw erro_('Já existe alguém com esse usuário. Se é você, volte e use "Já tenho conta"; senão, acrescente um sobrenome.', 'existe'); });
+    Object.keys(reg).sort().forEach(function (k) { if (!livre && !reg[k].login && k !== USUARIO_ADMIN && k !== ID_XAVIER) livre = k; });
+    if (!livre) throw erro_('Não há vagas livres no momento. Peça ao Luís para liberar uma.', 'vagas');
+    var o = {}; o[livre] = 1; limparMetricasDe_(o);
+    reg[livre] = { login: login, nome: nome, turma: turma, periodo: periodoDe_(turma), foto: '', papeis: [] };
+    salvarUsuariosReg_(reg);
+    anexar_(sh_('MR_Membros'), [[g.id, livre, 'membro', agora_(), 0, 0]]);
+    mrNovoPost_(g.id, livre, 'sistema', nome + ' entrou no grupo.', '', { subtipo: 'entrada' });
+    return livre;
+  });
+  var r = login_(id, {});
+  r.token = '';
+  r.grupo = g.id;
+  return r;
+}
+
 /** Entrada pelo nome de usuário. Só o administrador (luis) tem senha. */
 function entrar_(u, p) {
   var login = normLogin_(p.login);
@@ -2704,17 +2636,38 @@ function login_(u, p) {
   };
 }
 
-/** O próprio usuário ajusta turma, período e foto. */
+/** Foto: id de arquivo do Drive ou ícone do MedRats (ic:NN). */
+function fotoVal_(v) {
+  v = str_(v);
+  if (!v) return '';
+  var m = /^ic:(\\d{1,2})$/.exec(v);
+  if (m) { var n = Number(m[1]); if (n < 1 || n > 22) throw erro_('Ícone inválido.'); return 'ic:' + (n < 10 ? '0' + n : n); }
+  if (!/^[\\w-]{10,200}$/.test(v)) throw erro_('Foto inválida.');
+  return v;
+}
+
+/** O próprio usuário ajusta nome, usuário (login), turma, período e foto. */
 function salvarPerfil_(u, p) {
   return comLock_(function () {
     var reg = JSON.parse(JSON.stringify(usuariosReg_())), r = reg[u];
+    if (p.nome !== undefined) {
+      var nm = str_(p.nome).slice(0, 60);
+      if (!nm) throw erro_('Informe seu nome.');
+      r.nome = nm;
+    }
+    if (p.login !== undefined && u !== USUARIO_ADMIN) {
+      var lg = str_(p.login).slice(0, 30), nl = normLogin_(lg);
+      if (nl.length < 2) throw erro_('O usuário precisa ter ao menos 2 letras ou números (sem espaços ou símbolos).');
+      Object.keys(reg).forEach(function (k) { if (k !== u && reg[k].login && normLogin_(reg[k].login) === nl) throw erro_('Já existe alguém com esse usuário. Escolha outro.'); });
+      r.login = nl;
+    }
     if (p.turma !== undefined) {
       var t = str_(p.turma) ? normTurma_(p.turma) : '';
       if (str_(p.turma) && !t) throw erro_('Turma inválida. Use ano e semestre, como 2023B.');
       r.turma = t;
     }
     if (p.periodo !== undefined) r.periodo = Math.max(0, Math.min(12, Math.floor(Number(p.periodo)) || 0));
-    if (p.foto !== undefined) r.foto = str_(p.foto).slice(0, 200);
+    if (p.foto !== undefined) r.foto = fotoVal_(p.foto);
     salvarUsuariosReg_(reg);
     return perfil_(u);
   });
@@ -2814,13 +2767,18 @@ function apagarMetricas_(u, p) {
   if (Array.isArray(p.ids)) p.ids.forEach(function (id) { id = str_(id); if (reg[id]) alvo[id] = 1; });
   else Object.keys(reg).forEach(function (id) { if (id !== ID_XAVIER && (id !== USUARIO_ADMIN || p.incluirAdmin === true)) alvo[id] = 1; });
   var ids = Object.keys(alvo), linhas = 0;
-  comLock_(function () {
-    ABAS_METRICAS.forEach(function (par) {
-      apagarLinhas_(par[0], function (r) { if (alvo[String(r[par[1]])]) { linhas++; return true; } return false; });
-    });
-    ids.forEach(function (id) { invalidarEstado_(id); });
-  });
+  comLock_(function () { linhas = limparMetricasDe_(alvo); });
   return { usuarios: ids.length, linhas: linhas };
+}
+
+/** Apaga as linhas de métricas dos ids em \`alvo\` (já dentro da trava). Devolve quantas linhas saíram. */
+function limparMetricasDe_(alvo) {
+  var linhas = 0;
+  ABAS_METRICAS.forEach(function (par) {
+    apagarLinhas_(par[0], function (r) { if (alvo[String(r[par[1]])]) { linhas++; return true; } return false; });
+  });
+  Object.keys(alvo).forEach(function (id) { invalidarEstado_(id); });
+  return linhas;
 }
 
 /** Registra que a pessoa abriu (ou concluiu) uma aula. */
@@ -3149,7 +3107,7 @@ function uploadImagem_(u, p) {
 // Proteção das ações: usuário cadastrado e, para o administrador, sessão aberta com a senha.
 (function () {
   Object.keys(ACOES).forEach(function (k) {
-    if (k === 'entrar') return;
+    if (k === 'entrar' || k === 'conviteInfo' || k === 'conviteConta') return;
     var f = ACOES[k];
     ACOES[k] = function (u, p) {
       var r = usuariosReg_()[u];
@@ -3380,10 +3338,10 @@ function mfCamposQuestao(q) {
   let alts = q.alternativas || [], disc = !alts.length, alt = i => alts[i] || {};
   return O`<div><label class="label" for="e-enun">Enunciado</label><textarea id="e-enun" name="enunciado" class="input" rows="7" required>${q.enunciado}</textarea></div>
   ${disc ? O`<div><label class="label" for="e-gab">Resposta esperada</label><textarea id="e-gab" name="gabarito" class="input" rows="3">${q.gabarito || ""}</textarea></div>`
-    : O`<div class="space-y-3"><p class="label mb-0">Alternativas <span class="muted font-normal">(a E é opcional)</span></p>${MF_LETRAS.map((l, i) => O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><label class="label" for="e-alt-${l}">Alternativa ${l}</label><textarea id="e-alt-${l}" name="alt_${l}" class="input" rows="2">${alt(i).texto || ""}</textarea><label class="label mt-2" for="e-com-${l}">Justificativa da ${l} <span class="muted font-normal">(opcional)</span></label><textarea id="e-com-${l}" name="com_${l}" class="input" rows="2">${alt(i).comentario || ""}</textarea></div>`)}</div>
+    : O`<div class="space-y-3"><p class="label mb-0">Alternativas <span class="muted font-normal">(a E é opcional)</span></p>${MF_LETRAS.map((l, i) => O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><label class="label" for="e-alt-${l}">Alternativa ${l}</label><textarea id="e-alt-${l}" name="alt_${l}" class="input" rows="2">${alt(i).texto || ""}</textarea><div class="mb-1 mt-2 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="e-com-${l}">Justificativa da ${l} <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("e-com-" + l)}</div><textarea id="e-com-${l}" name="com_${l}" class="input" rows="2" data-rico>${alt(i).comentario || ""}</textarea></div>`)}</div>
     <div><label class="label" for="e-gabl">Gabarito</label><select id="e-gabl" name="gabarito" class="input sm:w-40">${MF_LETRAS.map(l => O`<option ${l === q.gabarito ? ot("selected") : ""}>${l}</option>`)}</select></div>`}
   <label class="inline-flex items-center gap-2"><input type="checkbox" name="anulada" class="h-4 w-4 accent-brand" ${q.anulada ? ot("checked") : ""}>Questão anulada</label>
-  <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="e-com">Comentário / resolução</label>${mfBarraFormato("e-com")}</div><textarea id="e-com" name="comentario" class="input" rows="9" data-rico>${q.comentario || ""}</textarea><p class="muted mt-1 text-xs">Selecione o texto e use <strong>B</strong> (negrito) ou <em>I</em> (itálico). As fotos da resolução ficam logo abaixo, em “Fotos”.</p></div>
+  <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="e-com">Comentário / resolução</label>${mfBarraFormato("e-com")}</div><textarea id="e-com" name="comentario" class="input" rows="9" data-rico data-colar-img="comentario">${q.comentario || ""}</textarea><p class="muted mt-1 text-xs">Selecione o texto e use <strong>B</strong> (negrito) ou <em>I</em> (itálico). Para colocar uma imagem na resolução, cole (Ctrl+V) ou arraste o arquivo aqui: ela aparece abaixo do texto.</p></div>
   ${mfCamposTax(q, Yr)}`;
 }
 /** Abre o editor da questão (usuário 02). aposSalvar recebe a questão atualizada. */
@@ -3428,6 +3386,10 @@ async function mfEditarQuestao(id, aposSalvar) {
       const t = ev.target;
       if (t.id === "eq-fotos") { [...t.files].forEach((f, k) => fotos.push({ arquivo: `e${Date.now().toString(36)}${k}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg").replace("svg+xml", "svg")}`, pos: "enunciado", leg: "", fileId: "", url: URL.createObjectURL(f), file: f })); t.value = ""; desenhar(); }
       if (t.dataset.efPos !== void 0) fotos[Number(t.dataset.efPos)].pos = t.value;
+    });
+    dlg.addEventListener("mf:imagem", ev => {
+      ev.detail.arquivos.forEach((f, k) => fotos.push({ arquivo: mfNomeImg(f, k), pos: ev.detail.pos, leg: "", fileId: "", url: URL.createObjectURL(f), file: f }));
+      desenhar(); be(ev.detail.arquivos.length > 1 ? "Imagens adicionadas à resolução (abaixo do texto)." : "Imagem adicionada à resolução (abaixo do texto).", "ok", 2500);
     });
     dlg.addEventListener("input", ev => { if (ev.target.dataset.efLeg !== void 0) fotos[Number(ev.target.dataset.efLeg)].leg = ev.target.value; });
     dlg.addEventListener("click", ev => { const b = ev.target.closest("[data-ef-rem]"); if (b) { fotos.splice(Number(b.dataset.efRem), 1); desenhar(); } });
@@ -3609,11 +3571,11 @@ body{font:400 8.5pt/1.38 Poppins,Arial,Helvetica,sans-serif}
 .corpo{flex:1 1 auto;min-height:0;overflow:hidden;column-gap:8mm;column-fill:auto}
 .corpo.col2{column-rule:.4pt solid #b5b5b5}
 .rod{flex:none;display:flex;justify-content:space-between;align-items:center;height:6mm;margin-top:2.5mm;border-top:.6pt solid #000;font-size:7pt}
-.pq{break-inside:avoid;margin:0 0 3.2mm}
-.pq h2{font-size:8.5pt;font-weight:600;margin:0 0 1mm}
-.enun{text-align:left}
+.pq{margin:0 0 3.2mm}
+.pq h2{font-size:8.5pt;font-weight:600;margin:0 0 1mm;break-after:avoid}
+.enun{text-align:justify;orphans:2;widows:2}
 .alts{list-style:none;margin:1.8mm 0 0;padding:0}
-.alts li{display:flex;align-items:flex-start;gap:2mm;margin:0 0 1.3mm}
+.alts li{display:flex;align-items:flex-start;gap:2mm;margin:0 0 1.3mm;break-inside:avoid}
 .al{flex:none;display:inline-flex;align-items:center;justify-content:center;width:4.6mm;height:4.6mm;border:.7pt solid #000;border-radius:50%;font-size:6.5pt;font-weight:600;line-height:1}
 .alt-t{min-width:0;flex:1;padding-top:.25mm}
 figure{margin:1.5mm 0;text-align:center;break-inside:avoid}
@@ -3624,8 +3586,8 @@ figcaption{font-size:6.5pt;margin-top:.8mm}
 h2.sec{font-size:9pt;font-weight:600;margin:0 0 2mm;break-after:avoid}
 table{width:100%;border-collapse:collapse;font-size:7.5pt}
 th,td{border:.4pt solid #666;padding:.8mm 1.6mm;text-align:left;vertical-align:top}
-.cq{break-inside:avoid;margin:0 0 2mm;font-size:7pt;line-height:1.3}
-.cq h3{font-size:7.2pt;font-weight:600;margin:0 0 .6mm}
+.cq{margin:0 0 2mm;font-size:7pt;line-height:1.3}
+.cq h3{font-size:7.2pt;font-weight:600;margin:0 0 .6mm;break-after:avoid}
 .cq p{margin:0 0 .8mm}
 @media screen{body{background:#cfd4da}.pagina{margin:14px auto;box-shadow:0 2px 12px rgba(0,0,0,.28)}}
 @media print{.barra{display:none}}`;
@@ -3703,18 +3665,85 @@ async function mfPaginarDoc(cfg) {
     return c;
   };
   const estoura = c => c.scrollWidth > c.clientWidth + 2 || c.scrollHeight > c.clientHeight + 2;
+  /* Distribuição sem lacunas: um item que não cabe no fim da página é dividido (peça a peça e, no enunciado, no meio do texto). */
+  const ehCab = e => e.tagName === "H2" || e.tagName === "H3";
+  const restam = no => [...no.children].reduce((n, e) => n + (e.tagName === "UL" ? e.children.length : 1), 0);
+  const retirarFim = no => {
+    const u = no.lastElementChild;
+    if (!u) return null;
+    if (u.tagName === "UL" && u.children.length) { const li = u.lastElementChild; li.remove(); if (!u.children.length) u.remove(); return { el: li, ul: u }; }
+    u.remove();
+    return { el: u, ul: null };
+  };
+  const recolocar = (no, r, mapa) => {
+    if (!r.ul) { no.append(r.el); return; }
+    let u = mapa ? mapa.get(r.ul) : r.ul;
+    if (!u) { u = r.ul.cloneNode(false); mapa.set(r.ul, u); }
+    if (u.parentNode !== no) no.append(u);
+    u.append(r.el);
+  };
+  const linhasDe = el => { const g = document.createRange(); g.selectNodeContents(el); return [...g.getClientRects()].filter(x => x.width > 1).length; };
+  const textos = raiz => { const w = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT), r = []; while (w.nextNode()) r.push(w.currentNode); return r; };
+  const palavrasDe = n => n.nodeValue.match(/\s*\S+\s*/g) || [];
+  /* Cópia de `el` só com as palavras [de, ate), mantendo negrito/itálico. */
+  const trecho = (el, de, ate) => {
+    const cp = el.cloneNode(true);
+    let i = 0;
+    textos(cp).forEach(n => { const p = palavrasDe(n); n.nodeValue = p.length ? p.filter((_, j) => i + j >= de && i + j < ate).join("") : (i >= de && i < ate ? n.nodeValue : ""); i += p.length; });
+    return cp;
+  };
+  const aparar = (raiz, fim) => { const ns = textos(raiz).filter(x => x.nodeValue.trim()), n = fim ? ns[ns.length - 1] : ns[0]; if (n) n.nodeValue = fim ? n.nodeValue.replace(/\s+$/, "") : n.nodeValue.replace(/^\s+/, ""); };
+  /* Divide o texto de `el` (já retirado de `no`): deixa a primeira parte em `no` e devolve a cauda, ou null.
+     Mantém ao menos 2 linhas de cada lado. */
+  const dividirTexto = (c, no, el) => {
+    const N = textos(el).reduce((s, n) => s + palavrasDe(n).length, 0);
+    if (N < 8) return null;
+    const orig = el.cloneNode(true), poe = k => el.replaceChildren(...trecho(orig, 0, k).childNodes);
+    const falha = () => { el.replaceChildren(...orig.cloneNode(true).childNodes); el.remove(); return null; };
+    no.append(el);
+    let lo = 0, hi = N - 1;
+    while (lo < hi) { const m = (lo + hi + 1) >> 1; poe(m); if (estoura(c)) hi = m - 1; else lo = m; }
+    let k = lo;
+    if (k < 1) return falha();
+    poe(k);
+    const nl = linhasDe(el);
+    if (nl < 2) return falha();
+    const cpl = el.textContent.length / nl;
+    while (k > 1 && trecho(orig, k, N).textContent.length < 2.2 * cpl) k--;
+    poe(k);
+    if (linhasDe(el) < 2) return falha();
+    aparar(el, true);
+    const cauda = trecho(orig, k, N);
+    aparar(cauda, false);
+    return cauda;
+  };
   const fluxo = (nos, cols, uma) => {
-    let c = nova(cols);
-    nos.forEach((no, i) => {
-      if (uma && i > 0) c = nova(cols);
+    let c = nova(cols), primeiro = true;
+    const fila = nos.slice();
+    while (fila.length) {
+      const no = fila.shift();
+      if (uma && !primeiro && !no.hasAttribute("data-cont")) c = nova(cols);
+      primeiro = false;
       c.append(no);
-      if (estoura(c) && c.children.length > 1) {
-        const mover = [no], ant = no.previousElementSibling;
-        ant && ant.classList.contains("sec") && mover.unshift(ant);
-        c = nova(cols);
-        mover.forEach(m => c.append(m));
+      if (!estoura(c)) continue;
+      const solta = c.children.length === 1, ret = [];
+      while (estoura(c) && restam(no) > 0) ret.unshift(retirarFim(no));
+      const p0 = ret[0];
+      if (p0 && (p0.el.classList.contains("enun") || p0.el.tagName === "P")) { const cauda = dividirTexto(c, no, p0.el); if (cauda) ret[0] = { el: cauda, ul: null }; else p0.el.remove(); }
+      let ult = no.lastElementChild;
+      while (ult && ehCab(ult)) { ult.remove(); ret.unshift({ el: ult, ul: null }); ult = no.lastElementChild; }
+      if (!restam(no)) {
+        if (solta) { recolocar(no, ret.shift()); }
+        else { const m = new Map(); ret.forEach(r => recolocar(no, r, m)); no.remove(); no.setAttribute("data-cont", ""); fila.unshift(no); c = nova(cols); continue; }
+        if (!ret.length) continue;
       }
-    });
+      const cauda = document.createElement("div"), mapa = new Map();
+      cauda.className = no.className;
+      cauda.setAttribute("data-cont", "");
+      ret.forEach(r => recolocar(cauda, r, mapa));
+      fila.unshift(cauda);
+      c = nova(cols);
+    }
   };
   const q = [...fonte.querySelectorAll('[data-sec="questoes"] > .pq')];
   q.length && fluxo(q, cfg.colunas, cfg.paginar);
@@ -4063,7 +4092,6 @@ async function mfFormAula({ cursoId, moduloId, aula, aoSalvar, subfocos = [], gr
   const corpo = O`<div class="space-y-3">
     <div><label class="label" for="au-tit">Título da aula</label><input id="au-tit" name="titulo" class="input" maxlength="160" required value="${a.titulo || ""}"></div>
     ${mfCamposTax(a)}
-    <div><label class="label" for="au-sub">Subfoco <span class="muted font-normal">(opcional)</span></label><select id="au-sub" name="subfocoId" class="input"></select></div>
     <div class="grid gap-3 sm:grid-cols-2"><div><label class="label" for="au-tipo">Tipo</label><select id="au-tipo" name="tipo" class="input">${["video", "pdf", "audio", "link"].map(v => O`<option value="${v}" ${v === tipoIni ? ot("selected") : ""}>${MF_ROTULO_TIPO[v]}</option>`)}</select></div>
     <div class="flex items-end gap-2 pb-2"><input id="au-flash" name="flash" type="checkbox" value="1" class="h-4 w-4" ${a.flash ? ot("checked") : ""}><label for="au-flash" class="text-sm">Aula Flash <span class="muted">(resumo rápido do assunto)</span></label></div></div>
     <div><label class="label" for="au-grupo">Aula (para reunir as partes e a Aula Flash) <span class="muted font-normal">(opcional)</span></label><input id="au-grupo" name="grupo" class="input" maxlength="120" list="au-grupos" placeholder="Ex.: Amenorreias e SOP" value="${a.grupo || ""}" autocomplete="off"><datalist id="au-grupos">${grupos.map(g => O`<option value="${g}"></option>`)}</datalist><p class="muted mt-1 text-xs">Aulas com o mesmo nome neste módulo e foco aparecem juntas, em um só item.</p></div>
@@ -4085,7 +4113,7 @@ async function mfFormAula({ cursoId, moduloId, aula, aoSalvar, subfocos = [], gr
         be("Enviando arquivo…", "info", 60000);
         arq = await mfEnviarArquivo(v.arquivo);
       }
-      const campos = { titulo: v.titulo, tipo: v.tipo, url: (v.url || "").trim(), area: v.area, subarea: v.subarea, foco: v.foco, subfocoId: v.subfocoId || "", grupo: (v.grupo || "").trim(), flash: !!v.flash, parte: v.parte || "", totalPartes: v.totalPartes || "" };
+      const campos = { titulo: v.titulo, tipo: v.tipo, url: (v.url || "").trim(), area: v.area, subarea: v.subarea, foco: v.foco, subfocoId: "", grupo: (v.grupo || "").trim(), flash: !!v.flash, parte: v.parte || "", totalPartes: v.totalPartes || "" };
       try {
         if (aula) {
           const r = await ge("editarAula", { id: aula.id, ...campos, arquivo: arq, manterArquivo: !arq && !!aula.arquivo, removerArquivo: false });
@@ -4097,23 +4125,13 @@ async function mfFormAula({ cursoId, moduloId, aula, aoSalvar, subfocos = [], gr
       be("Aula salva.", "ok", 2000);
       aoSalvar && await aoSalvar();
     } }, a);
-  const dlg = mfDialogoTopo(), sel = dlg && dlg.querySelector("#au-sub");
-  if (sel) {
-    const atualiza = () => {
-      const ar = dlg.querySelector('[data-tax="area"]').value, su = dlg.querySelector('[data-tax="sub"]').value, fo = dlg.querySelector('[data-tax="foco"]').value;
-      const lista = subfocos.filter(s => s.area === ar && s.subarea === su && s.foco === fo).sort((x, y) => x.ordem - y.ordem);
-      const manter = sel.value || a.subfocoId || "";
-      sel.innerHTML = String(O`<option value="">Sem subfoco</option>${lista.map(s => O`<option value="${s.id}" ${s.id === manter ? ot("selected") : ""}>${s.nome}</option>`)}`);
-    };
-    atualiza(); dlg.addEventListener("change", atualiza);
-  }
   return prom;
 }
 
 var mfVAulas = { render: async function (r, { query: qy }) {
   await mfAtualizarTax();
   let d = { cursos: [], modulos: [], aulas: [], subfocos: [] };
-  const visao = qy.visao === "curso" ? "curso" : "foco", agrupar = qy.agrupar === "curso" ? "curso" : "subfoco";
+  const visao = qy.visao === "curso" ? "curso" : "foco", agrupar = qy.agrupar === "curso" ? "curso" : "lista";
   const pt = (a, b) => String(a).localeCompare(String(b), "pt-BR");
   const criado = (a, b) => (a.criadoEm < b.criadoEm ? -1 : a.criadoEm > b.criadoEm ? 1 : 0);
   const ordemFoco = a => {
@@ -4124,14 +4142,14 @@ var mfVAulas = { render: async function (r, { query: qy }) {
   const chaveFoco = a => `${a.area}|${a.subarea}|${a.foco}`;
   const cursoPorId = id => d.cursos.find(c => c.id === id), moduloPorId = id => d.modulos.find(m => m.id === id);
   const modulosDo = cid => d.modulos.filter(m => m.cursoId === cid).sort(criado);
-  const subfocosDo = k => d.subfocos.filter(s => chaveFoco(s) === k).sort((a, b) => a.ordem - b.ordem);
+  const subfocosDo = () => [];
   const porOrdem = (a, b) => a.ordem - b.ordem || criado(a, b);
   /** Aulas de um foco na ordem de exibição: por subfoco (os sem subfoco por último) e depois pela posição. */
   function sequencia(k) {
     const subs = subfocosDo(k), pos = id => { const i = subs.findIndex(s => s.id === id); return i < 0 ? 9999 : i; };
     return d.aulas.filter(a => chaveFoco(a) === k).sort((a, b) => pos(a.subfocoId) - pos(b.subfocoId) || porOrdem(a, b));
   }
-  const grupo = (k, sid) => sequencia(k).filter(a => (a.subfocoId || "") === (sid || ""));
+  const grupo = k => sequencia(k);
   const btn = (attr, icone, rot, extra = "") => !mfPode("aulas") ? "" : O`<button type="button" class="btn btn-ghost btn-sm px-2" ${ot(attr)} aria-label="${rot}" title="${rot}" ${extra ? ot(extra) : ""}><i data-lucide="${icone}" class="h-4 w-4" aria-hidden="true"></i></button>`;
   const linhaAula = (a, { setas = null, contexto = false } = {}) => O`<li class="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 text-sm">
     <span class="muted inline-flex w-14 shrink-0 items-center gap-1.5 text-xs max-sm:order-2 max-sm:w-auto"><i data-lucide="${MF_ICONE_TIPO[a.tipo]}" class="h-4 w-4" aria-hidden="true"></i>${MF_ROTULO_TIPO[a.tipo]}</span>
@@ -4185,22 +4203,22 @@ var mfVAulas = { render: async function (r, { query: qy }) {
       ${lista.length ? O`<ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">${renderLinhas(lista, { setasFn: setas, contexto: !0 })}</ul>` : O`<p class="muted mt-2 text-sm">Nenhuma aula aqui.</p>`}</details>`;
   }
   function vFocoAulas() {
-    const k = qy.foco, [area, sub, foco] = k.split("|"), seq = sequencia(k), subs = subfocosDo(k);
+    const k = qy.foco, [area, sub, foco] = k.split("|"), seq = sequencia(k);
     const links = O`<div class="inline-flex rounded-full border border-slate-200 p-0.5 text-sm dark:border-slate-700" role="group" aria-label="Agrupar por">
-      <a href="#/aulas?visao=foco&foco=${encodeURIComponent(k)}&agrupar=subfoco" class="rounded-full px-3 py-1 ${agrupar === "subfoco" ? "bg-brand text-white" : "text-slate-600 dark:text-slate-300"}">Por subfoco</a>
+      <a href="#/aulas?visao=foco&foco=${encodeURIComponent(k)}&agrupar=lista" class="rounded-full px-3 py-1 ${agrupar === "lista" ? "bg-brand text-white" : "text-slate-600 dark:text-slate-300"}">Lista</a>
       <a href="#/aulas?visao=foco&foco=${encodeURIComponent(k)}&agrupar=curso" class="rounded-full px-3 py-1 ${agrupar === "curso" ? "bg-brand text-white" : "text-slate-600 dark:text-slate-300"}">Por curso</a></div>`;
     let corpo;
-    if (!seq.length && !subs.length) corpo = $n("graduation-cap", "Nenhuma aula neste foco", "");
+    if (!seq.length) corpo = $n("graduation-cap", "Nenhuma aula neste foco", "");
     else if (agrupar === "curso") {
       const cursos = [...new Set(seq.map(a => a.cursoId))].map(cursoPorId).filter(Boolean).sort(criado);
       corpo = O`${cursos.map(c => O`<details class="card" data-k="fc|${k}|${c.id}" ${mfAberto("fc|" + k + "|" + c.id)}>${resumo("", O`<h3 class="flex items-center gap-2 text-sm font-semibold"><i data-lucide="graduation-cap" class="h-4 w-4" aria-hidden="true"></i>${c.nome}</h3>`)}
         <div class="mt-2 space-y-2 border-l-2 border-slate-200 pl-3 dark:border-slate-700">${modulosDo(c.id).filter(m => seq.some(a => a.moduloId === m.id)).map(m => O`<details data-k="fm|${k}|${m.id}" ${mfAberto("fm|" + k + "|" + m.id)}><summary class="cursor-pointer py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">${m.nome}</summary>${listaSub(seq.filter(a => a.moduloId === m.id), k, {})}</details>`)}</div></details>`)}`;
     } else {
-      corpo = O`${subs.map(s => secaoAulas(k, "fs|" + s.id, s.nome, grupo(k, s.id), s.id, O`<span class="flex gap-1">${btn(`data-subfoco-renomear="${s.id}"`, "pencil", "Renomear subfoco")}${btn(`data-subfoco-excluir="${s.id}"`, "trash-2", "Excluir subfoco")}</span>`))}${grupo(k, "").length || !subs.length ? secaoAulas(k, "fs|" + k + "|sem", subs.length ? "Sem subfoco" : "Aulas", grupo(k, ""), "") : ""}`;
+      corpo = secaoAulas(k, "fs|" + k + "|sem", "Aulas", grupo(k), "");
     }
     return O`<div><a href="#/aulas?visao=foco&area=${encodeURIComponent(area)}" class="btn btn-ghost btn-sm -ml-2"><i data-lucide="arrow-left" class="h-4 w-4" aria-hidden="true"></i>${area}</a></div>
       <div class="flex flex-wrap items-center justify-between gap-2"><div>${mfCaminho({ area, subarea: sub, foco })}</div>
-        <div class="flex flex-wrap items-center gap-2">${links}${mfPode("aulas") ? O`<button type="button" class="btn btn-outline btn-sm" data-novo-subfoco="${k}"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Subfoco</button>` : ""}${mfBotoesSecoes()}</div></div>
+        <div class="flex flex-wrap items-center gap-2">${links}${mfBotoesSecoes()}</div></div>
       <div class="space-y-3">${corpo}</div>
       <div class="pt-3">${mfBotaoTreinar(area, sub, foco)}</div>`;
   }
@@ -4264,13 +4282,6 @@ var mfVAulas = { render: async function (r, { query: qy }) {
       if (!await Ac(`Excluir o módulo “${m.nome}” com suas aulas? Os arquivos também serão apagados.`, { confirmar: "Excluir", perigo: !0, titulo: "Excluir módulo" })) return;
       const res = await ge("excluirModulo", { id: m.id }); await mfApagarArquivos(res.arquivos); be("Módulo excluído.", "ok", 2000); return carregar();
     }
-    if ((b = t.closest("[data-novo-subfoco]"))) { const [area, subarea, foco] = b.dataset.novoSubfoco.split("|"); return nomear("Novo subfoco", "", async nome => { await ge("criarSubfoco", { area, subarea, foco, nome }); be("Subfoco criado.", "ok", 2000); }); }
-    if ((b = t.closest("[data-subfoco-renomear]"))) { const s = d.subfocos.find(x => x.id === b.dataset.subfocoRenomear); return nomear("Renomear subfoco", s.nome, async nome => { await ge("renomearSubfoco", { id: s.id, nome }); }); }
-    if ((b = t.closest("[data-subfoco-excluir]"))) {
-      const s = d.subfocos.find(x => x.id === b.dataset.subfocoExcluir);
-      if (!await Ac(`Excluir o subfoco “${s.nome}”? As aulas dele continuam no foco, sem subfoco.`, { confirmar: "Excluir", perigo: !0, titulo: "Excluir subfoco" })) return;
-      await ge("excluirSubfoco", { id: s.id }); be("Subfoco excluído.", "ok", 2000); return carregar();
-    }
     if ((b = t.closest("[data-nova-aula]"))) { const [cid, mid] = b.dataset.novaAula.split("|"); return mfFormAula({ cursoId: cid, moduloId: mid, subfocos: d.subfocos, grupos: gruposExistentes(), aoSalvar: carregar }); }
     if ((b = t.closest("[data-abrir-grupo]"))) { const ps = gruposMapa[b.dataset.abrirGrupo]; return ps && mfAbrirAula(ps[0], ps); }
     if ((b = t.closest("[data-abrir-aula]"))) { const a = d.aulas.find(x => x.id === b.dataset.abrirAula); return mfAbrirAula(a, sequencia(chaveFoco(a))); }
@@ -4281,10 +4292,10 @@ var mfVAulas = { render: async function (r, { query: qy }) {
       const res = await ge("excluirAula", { id: a.id }); await mfApagarArquivos(res.arquivos); be("Aula excluída.", "ok", 2000); return carregar();
     }
     if ((b = t.closest("[data-mover]"))) {
-      const [id, dir] = b.dataset.mover.split("|"), a = d.aulas.find(x => x.id === id), g = grupo(chaveFoco(a), a.subfocoId), i = g.findIndex(x => x.id === id), j = i + Number(dir);
+      const [id, dir] = b.dataset.mover.split("|"), a = d.aulas.find(x => x.id === id), g = grupo(chaveFoco(a)), i = g.findIndex(x => x.id === id), j = i + Number(dir);
       if (j < 0 || j >= g.length) return;
       [g[i], g[j]] = [g[j], g[i]];
-      try { await ge("ordenarAulas", { itens: g.map((x, n) => ({ id: x.id, subfocoId: x.subfocoId || "", ordem: n + 1 })) }); } catch (x) { return be(x.message, "erro"); }
+      try { await ge("ordenarAulas", { itens: g.map((x, n) => ({ id: x.id, subfocoId: "", ordem: n + 1 })) }); } catch (x) { return be(x.message, "erro"); }
       return carregar();
     }
   });
@@ -4456,7 +4467,7 @@ var mfVNovaProva = { render: async function (r, { query: qy }) {
           <div class="w-40"><label class="label" for="np-gab">Gabarito</label><select id="np-gab" class="input">${LETRAS.map(l => O`<option>${l}</option>`)}</select></div></div>
         <div id="np-disc" class="hidden"><label class="label" for="np-resp">Resposta esperada</label><textarea id="np-resp" class="input" rows="4"></textarea></div>
         <label class="flex items-center gap-2 text-sm"><input id="np-anulada" type="checkbox" class="h-4 w-4 accent-brand">Questão anulada</label>
-        <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="np-com">Resolução / comentário (opcional)</label>${mfBarraFormato("np-com")}</div><textarea id="np-com" class="input" rows="4" data-rico></textarea></div>
+        <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="np-com">Resolução / comentário (opcional)</label>${mfBarraFormato("np-com")}</div><textarea id="np-com" class="input" rows="4" data-rico data-colar-img="comentario"></textarea><p class="muted mt-1 text-xs">Cole (Ctrl+V) ou arraste uma imagem aqui para colocá-la na resolução.</p></div>
         <div><label class="label" for="np-fotos">Fotos (opcional)</label><input id="np-fotos" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" class="input py-1.5"><ul id="np-imgs" class="mt-3 space-y-2"></ul></div>
         <p id="np-erro" class="hidden text-sm font-medium text-rose-600" role="alert"></p>
         <div class="flex flex-wrap gap-2"><button class="btn btn-primary" type="submit" id="np-salvar">Salvar questão</button><button class="btn btn-outline" type="button" id="np-concluir">Concluir prova</button></div>
@@ -4501,6 +4512,7 @@ var mfVNovaProva = { render: async function (r, { query: qy }) {
     if (t.dataset.imgPos !== void 0) imgs[Number(t.dataset.imgPos)].pos = t.value;
   });
   r.addEventListener("input", ev => { if (ev.target.dataset.imgLeg !== void 0) imgs[Number(ev.target.dataset.imgLeg)].leg = ev.target.value; });
+  r.addEventListener("mf:imagem", ev => { ev.detail.arquivos.forEach(f => imgs.push({ file: f, url: URL.createObjectURL(f), pos: ev.detail.pos, leg: "" })); listaImgs(); be("Imagem adicionada à resolução (abaixo do texto).", "ok", 2500); });
   r.addEventListener("click", ev => {
     let b;
     if ((b = ev.target.closest("[data-img-rem]"))) { const m = imgs.splice(Number(b.dataset.imgRem), 1)[0]; URL.revokeObjectURL(m.url); listaImgs(); }
@@ -4606,6 +4618,18 @@ document.addEventListener("keydown", ev => {
   const k = ev.key.toLowerCase();
   if (k === "b" || k === "i") { ev.preventDefault(); mfAplicarFormato(t, k === "b" ? "**" : "*"); }
 });
+
+/** Imagem colada (Ctrl+V) ou arrastada sobre um campo [data-colar-img]: avisa a janela com mf:imagem. */
+function mfNomeImg(f, k) { return `e${Date.now().toString(36)}${k}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg").replace("svg+xml", "svg")}`; }
+function mfEmitirImagens(t, lista) {
+  const arq = [...(lista || [])].filter(f => /^image\//.test(f.type));
+  if (!arq.length) return !1;
+  t.dispatchEvent(new CustomEvent("mf:imagem", { bubbles: !0, detail: { arquivos: arq, pos: t.dataset.colarImg } }));
+  return !0;
+}
+document.addEventListener("paste", ev => { const t = ev.target; if (t && t.tagName === "TEXTAREA" && t.hasAttribute("data-colar-img") && ev.clipboardData && mfEmitirImagens(t, ev.clipboardData.files)) ev.preventDefault(); });
+document.addEventListener("dragover", ev => { const t = ev.target; if (t && t.tagName === "TEXTAREA" && t.hasAttribute("data-colar-img") && ev.dataTransfer && [...ev.dataTransfer.types].includes("Files")) ev.preventDefault(); });
+document.addEventListener("drop", ev => { const t = ev.target; if (t && t.tagName === "TEXTAREA" && t.hasAttribute("data-colar-img") && ev.dataTransfer && mfEmitirImagens(t, ev.dataTransfer.files)) ev.preventDefault(); });
 
 // ── Partes e aulas Flash de uma mesma aula, reunidas num só lugar ──
 function mfOrdemPartes(a, b) { return (a.flash === b.flash ? 0 : a.flash ? 1 : -1) || (a.parte || 999) - (b.parte || 999) || (a.ordem || 0) - (b.ordem || 0) || (a.criadoEm < b.criadoEm ? -1 : 1); }
@@ -4744,7 +4768,10 @@ var mfVPerfil = { render: async function (r) {
         <div class="min-w-0"><p class="text-lg font-semibold">${p.nome || p.login}</p><p class="muted text-sm">@${p.login}${p.admin ? " · Administrador" : p.editor ? " · Editor" : ""}</p>
           <p class="mt-1 inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" title="Vezes em que você foi o Top 1 da semana em algum grupo, nos últimos 3 meses"><i data-lucide="trophy" class="h-4 w-4" aria-hidden="true"></i>${Gt(mr.trofeus, "troféu", "troféus")}</p></div></div>
       ${comEnvio ? "" : O`<div><label class="label" for="pf-link">Foto de perfil (link do Google Drive)</label><input id="pf-link" name="fotoLink" class="input" placeholder="https://drive.google.com/file/d/…" autocomplete="off"><p class="muted mt-1 text-xs">O envio direto de fotos ainda não foi configurado. A foto precisa estar compartilhada como “qualquer pessoa com o link”.</p></div>`}
-      <div class="grid gap-3 sm:grid-cols-2"><div><label class="label" for="pf-turma">Turma (ano + semestre de entrada)</label><input id="pf-turma" name="turma" class="input" maxlength="6" placeholder="2023B" value="${p.turma || ""}"></div>
+      <div class="grid gap-3 sm:grid-cols-2"><div><label class="label" for="pf-nome">Nome</label><input id="pf-nome" name="nome" class="input" maxlength="60" autocomplete="name" value="${p.nome || ""}"></div>
+        <div><label class="label" for="pf-login">Usuário (para entrar)</label><input id="pf-login" name="login" class="input" maxlength="30" autocomplete="off" autocapitalize="none" spellcheck="false" value="${p.login || ""}" ${p.admin ? ot("disabled") : ""}>${p.admin ? "" : O`<p class="muted mt-1 text-xs">Só letras e números. É o que você digita ao entrar.</p>`}</div></div>
+      <div><p class="label">Ícone de perfil</p>${mfGradeIcones(p.foto)}<p class="muted mt-1 text-xs">${comEnvio ? "Ou toque na sua foto acima para enviar uma imagem." : "Escolha um ícone."}</p></div>
+      <div class="grid gap-3 sm:grid-cols-2"><div><label class="label" for="pf-turma">Turma (ano + semestre de entrada)</label><input id="pf-turma" name="turma" class="input" maxlength="6" placeholder="2023B" data-turma-auto="pf-periodo" value="${p.turma || ""}"></div>
         <div><label class="label" for="pf-periodo">Período</label><select id="pf-periodo" name="periodo" class="input"><option value="0">—</option>${Array.from({ length: 12 }, (_, i) => O`<option value="${i + 1}" ${p.periodo === i + 1 ? ot("selected") : ""}>${i + 1}º Período</option>`)}</select></div></div>
       ${(p.poderes || []).length && !p.admin ? O`<p class="muted text-xs">Poderes de Editor: ${p.poderes.map(x => MF_PODERES[x] ? MF_PODERES[x][0] : x).join(", ")}</p>` : ""}
       <p id="pf-erro" class="hidden text-sm font-medium text-rose-600" role="alert"></p>
@@ -4752,7 +4779,11 @@ var mfVPerfil = { render: async function (r) {
     jn(r);
   }
   desenhar();
-  r.addEventListener("click", ev => { ev.target.closest("#pf-foto-btn") && r.querySelector("#pf-foto").click(); });
+  r.addEventListener("click", async ev => {
+    if (ev.target.closest("#pf-foto-btn")) return r.querySelector("#pf-foto").click();
+    const bi = ev.target.closest("[data-ic]");
+    if (bi) { try { Ee.perfil = p = await ge("salvarPerfil", { foto: "ic:" + bi.dataset.ic }); be("Ícone atualizado.", "ok", 1500); r.querySelector("#pf-avatar").innerHTML = String(mfAvatar({ nome: p.nome || p.login, foto: p.foto }, "h-20 w-20")); mfMarcarIcone(r, bi.dataset.ic); } catch (x) { be(x.message, "erro"); } }
+  });
   r.addEventListener("change", async ev => {
     if (ev.target.id !== "pf-foto" || !ev.target.files[0]) return;
     try { be("Enviando foto…", "info", 8e3); const id = await mfEnviarFoto(ev.target.files[0]); Ee.perfil = p = await ge("salvarPerfil", { foto: id }); be("Foto atualizada.", "ok", 2e3); desenhar(); } catch (x) { be(x.message, "erro", 6e3); }
@@ -4760,7 +4791,8 @@ var mfVPerfil = { render: async function (r) {
   r.addEventListener("submit", async ev => {
     ev.preventDefault(); const f = ev.target, e = r.querySelector("#pf-erro"); e.classList.add("hidden");
     try {
-      const dados = { turma: f.turma.value.trim(), periodo: Number(f.periodo.value) || 0 };
+      const dados = { nome: f.nome.value.trim(), turma: f.turma.value.trim(), periodo: Number(f.periodo.value) || 0 };
+      if (!p.admin) dados.login = f.login.value.trim();
       if (f.fotoLink && f.fotoLink.value.trim()) { const id = mfIdDoDrive(f.fotoLink.value); if (!id) throw new Error("Não reconheci esse link do Drive."); dados.foto = id; }
       Ee.perfil = p = await ge("salvarPerfil", dados); be("Perfil salvo.", "ok", 2e3); desenhar();
     } catch (x) { e.textContent = x.message; e.classList.remove("hidden"); }
@@ -4806,10 +4838,18 @@ function mfDiaRotulo(iso) { const d = new Date(iso), h = new Date(); if (d.toDat
 function mfIdDoDrive(t) { t = String(t || "").trim(); if (!t) return ""; let m = /\/d\/([\w-]{10,})/.exec(t) || /[?&]id=([\w-]{10,})/.exec(t); return m ? m[1] : /^[\w-]{20,}$/.test(t) ? t : ""; }
 function mfFotoUrl(id, tam = 200) { return id ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w${tam}` : ""; }
 function mfAvatar(p, cls = "h-9 w-9") {
-  p = p || {}; const nome = p.nome || "?", cor = MF_COR_AVATAR[(nome.charCodeAt(0) || 0) % MF_COR_AVATAR.length];
+  p = p || {}; const nome = p.nome || "?", cor = MF_COR_AVATAR[(nome.charCodeAt(0) || 0) % MF_COR_AVATAR.length], ic = /^ic:(\d\d)$/.exec(p.foto || "");
+  if (ic) return O`<img src="medrats-icones/rato-${ic[1]}.png" alt="" class="${cls} shrink-0 rounded-full bg-white object-cover ring-1 ring-slate-200 dark:ring-slate-600" loading="lazy">`;
   return p.foto ? O`<img src="${mfFotoUrl(p.foto, 160)}" alt="" data-mrfoto class="${cls} shrink-0 rounded-full bg-slate-200 object-cover" loading="lazy" referrerpolicy="no-referrer">`
     : O`<span class="${cls} flex shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white" style="background:${cor}" aria-hidden="true">${nome.trim().slice(0, 2).toUpperCase()}</span>`;
 }
+/** Grupo sem ícone usa o primeiro rato. */
+function mfAvatarGrupo(g, cls) { return mfAvatar({ nome: g.nome, foto: g.foto || "ic:01" }, cls); }
+/** Grade dos 22 ícones do MedRats; cada botão leva data-ic="NN". */
+function mfGradeIcones(atual) {
+  return O`<div class="grid grid-cols-6 gap-1.5 sm:grid-cols-11" role="radiogroup" aria-label="Ícones">${Array.from({ length: 22 }, (_, i) => { const n = String(i + 1).padStart(2, "0"), sel = atual === "ic:" + n; return O`<button type="button" data-ic="${n}" role="radio" aria-checked="${sel}" aria-label="Ícone ${i + 1}" class="rounded-full p-0.5 ${sel ? "ring-2 ring-brand" : "ring-2 ring-transparent hover:ring-slate-300"}"><img src="medrats-icones/rato-${n}.png" alt="" class="h-11 w-11 rounded-full" loading="lazy"></button>`; })}</div>`;
+}
+function mfMarcarIcone(raiz, n) { raiz.querySelectorAll("[data-ic]").forEach(x => { const on = x.dataset.ic === n; x.setAttribute("aria-checked", on); x.classList.toggle("ring-brand", on); x.classList.toggle("ring-transparent", !on); }); }
 document.addEventListener("error", ev => { const t = ev.target; if (t && t.tagName === "IMG" && t.hasAttribute("data-mrfoto") && !t.dataset.falhou) { t.dataset.falhou = "1"; t.style.visibility = "hidden"; } }, !0);
 /** Reduz a foto (até 1280 px, JPEG) e envia ao Apps Script que grava na pasta do Drive. Devolve o id do arquivo. */
 async function mfEnviarFoto(file) {
@@ -4824,7 +4864,7 @@ async function mfEnviarFoto(file) {
   const dados = QA(await blob.arrayBuffer());
   const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ acao: "foto", nome: file.name.replace(/\.[^.]+$/, ""), mime: "image/jpeg", dados, chave: (window.CONFIG || {}).FOTOS_CHAVE || "" }), redirect: "follow" });
   let j; try { j = await resp.json(); } catch { throw new Error("Não foi possível enviar a foto agora. Tente de novo."); }
-  if (!j.ok) throw new Error(j.erro || "Não foi possível enviar a foto.");
+  if (!j.ok) throw new Error(/DriveApp|Access denied|authoriz|autoriz/i.test(j.erro || "") ? "O script do Drive ainda não foi autorizado. No Apps Script, execute a função autorizar() uma vez e publique uma nova versão da implantação." : j.erro || "Não foi possível enviar a foto.");
   return j.id;
 }
 function mfMedalha(pos, tam = 120) {
@@ -4842,7 +4882,7 @@ async function mfDesafiar(q) {
   let d; try { d = await ge("mrMeusGrupos"); } catch (x) { return be(x.message, "erro"); }
   if (!d.grupos.length) return pn({ titulo: "Desafiar amigos", confirmar: "Ir ao MedRats", cancelar: "Fechar", corpo: O`<p class="text-sm">Você ainda não está em nenhum grupo. Crie um grupo ou entre por um convite no MedRats.</p>`, onSubmit: async () => { location.hash = "#/medrats"; } });
   return pn({ titulo: "Desafiar amigos", confirmar: "Enviar desafio", corpo: O`<div class="space-y-3 text-sm"><p>Envie esta questão ao chat. Os amigos marcam a alternativa que acham certa e você revela quando quiser.</p>${mfCaminho(q)}
-    <fieldset class="space-y-2"><legend class="label">Grupos</legend>${d.grupos.map((g, i) => O`<label class="flex items-center gap-2"><input type="checkbox" name="g_${g.id}" class="h-4 w-4 accent-brand" ${i === 0 ? ot("checked") : ""}>${mfAvatar({ nome: g.nome, foto: g.foto }, "h-6 w-6")}<span>${g.nome}</span></label>`)}</fieldset>
+    <fieldset class="space-y-2"><legend class="label">Grupos</legend>${d.grupos.map((g, i) => O`<label class="flex items-center gap-2"><input type="checkbox" name="g_${g.id}" class="h-4 w-4 accent-brand" ${i === 0 ? ot("checked") : ""}>${mfAvatarGrupo({ nome: g.nome, foto: g.foto }, "h-6 w-6")}<span>${g.nome}</span></label>`)}</fieldset>
     <div><label class="label" for="ds-txt">Recado (opcional)</label><input id="ds-txt" name="texto" class="input" maxlength="200" placeholder="Quem acerta?"></div></div>`,
     onSubmit: async v => {
       const ids = d.grupos.filter(g => v["g_" + g.id]).map(g => g.id);
@@ -4855,16 +4895,16 @@ async function mfDesafiar(q) {
 // ── Lista de grupos ──
 var mfVMedRats = { render: async function (r) {
   const d = await ge("mrMeusGrupos"), dias = Math.max(0, Math.ceil((d.semana.fimMs - Date.now()) / 864e5));
-  const cartao = g => O`<a href="#/medrats/g/${g.id}" class="card flex items-center gap-3 p-4 hover:shadow-md">${mfAvatar({ nome: g.nome, foto: g.foto }, "h-12 w-12")}<div class="min-w-0 flex-1"><p class="truncate font-semibold">${g.nome}</p><p class="muted truncate text-xs">${Gt(g.membros, "membro", "membros")}${mfTurmaGrupo(g) ? " · " + mfTurmaGrupo(g) : ""}</p></div>${g.posicao ? O`<div class="shrink-0 text-right"><p class="text-sm font-semibold tabular-nums">${g.pontosSemana} pts</p><p class="muted text-xs">${g.posicao}º lugar</p></div>` : ""}<i data-lucide="chevron-right" class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true"></i></a>`;
+  const cartao = g => O`<a href="#/medrats/g/${g.id}" class="card flex items-center gap-3 p-4 hover:shadow-md">${mfAvatarGrupo({ nome: g.nome, foto: g.foto }, "h-12 w-12")}<div class="min-w-0 flex-1"><p class="truncate font-semibold">${g.nome}</p><p class="muted truncate text-xs">${Gt(g.membros, "membro", "membros")}${mfTurmaGrupo(g) ? " · " + mfTurmaGrupo(g) : ""}</p></div>${g.posicao ? O`<div class="shrink-0 text-right"><p class="text-sm font-semibold tabular-nums">${g.pontosSemana} pts</p><p class="muted text-xs">${g.posicao}º lugar</p></div>` : ""}<i data-lucide="chevron-right" class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true"></i></a>`;
   r.innerHTML = String(O`<div class="flex flex-wrap items-end justify-between gap-3"><div><h1 class="h1 flex items-center gap-2"><i data-lucide="rocket" class="h-6 w-6" aria-hidden="true"></i>MedRats</h1><p class="muted mt-1 text-sm">Estudem juntos: check-in diário, pontos da semana e desafios entre amigos. A semana encerra em ${Gt(dias, "dia", "dias")}.</p></div>
       <div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" title="Vezes em que você foi o Top 1 da semana, nos últimos 3 meses"><i data-lucide="trophy" class="h-4 w-4" aria-hidden="true"></i>${d.trofeus}</span><button type="button" class="btn btn-primary" id="mr-criar"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Criar grupo</button></div></div>
     <section class="mt-5 space-y-3" aria-label="Meus grupos">${d.grupos.length ? d.grupos.map(cartao) : $n("users", "Você ainda não está em nenhum grupo", "Crie o seu e convide os amigos por link, ou entre com um convite.")}</section>
     <section class="card mt-5"><h2 class="h2 mb-2">Entrar com um convite</h2><form id="mr-codigo" class="flex gap-2"><label class="sr-only" for="mr-cod">Link ou código do convite</label><input id="mr-cod" class="input" placeholder="Cole o link ou o código do convite" autocomplete="off"><button class="btn btn-outline shrink-0" type="submit">Entrar</button></form></section>
-    ${d.descobrir.length ? O`<section class="mt-5" aria-label="Grupos públicos"><h2 class="h2 mb-2">Grupos públicos</h2><div class="space-y-3">${d.descobrir.map(g => O`<a href="#/medrats/convite/${g.codigo}" class="card flex items-center gap-3 p-4 hover:shadow-md">${mfAvatar({ nome: g.nome, foto: g.foto }, "h-10 w-10")}<div class="min-w-0 flex-1"><p class="truncate font-semibold">${g.nome}</p><p class="muted text-xs">${Gt(g.membros, "membro", "membros")}${mfTurmaGrupo(g) ? " · " + mfTurmaGrupo(g) : ""}</p></div><span class="btn btn-outline btn-sm">Ver</span></a>`)}</div></section>` : ""}`);
+    ${d.descobrir.length ? O`<section class="mt-5" aria-label="Grupos públicos"><h2 class="h2 mb-2">Grupos públicos</h2><div class="space-y-3">${d.descobrir.map(g => O`<a href="#/medrats/convite/${g.codigo}" class="card flex items-center gap-3 p-4 hover:shadow-md">${mfAvatarGrupo({ nome: g.nome, foto: g.foto }, "h-10 w-10")}<div class="min-w-0 flex-1"><p class="truncate font-semibold">${g.nome}</p><p class="muted text-xs">${Gt(g.membros, "membro", "membros")}${mfTurmaGrupo(g) ? " · " + mfTurmaGrupo(g) : ""}</p></div><span class="btn btn-outline btn-sm">Ver</span></a>`)}</div></section>` : ""}`);
   jn(r);
   r.querySelector("#mr-criar").addEventListener("click", () => pn({ titulo: "Criar grupo", confirmar: "Criar", largo: !0, corpo: O`<div class="space-y-3">
       <div><label class="label" for="cg-nome">Nome do grupo</label><input id="cg-nome" name="nome" class="input" maxlength="20" required placeholder="Ex.: Plantão do 7º"><p class="muted mt-1 text-right text-xs">até 20 caracteres</p></div>
-      <div class="grid gap-3 sm:grid-cols-2"><div><label class="label" for="cg-turma">Turma (ano + semestre)</label><input id="cg-turma" name="turma" class="input" maxlength="6" placeholder="2023B"></div><div><label class="label" for="cg-periodo">Período</label><select id="cg-periodo" name="periodo" class="input"><option value="0">—</option>${Array.from({ length: 12 }, (_, i) => O`<option value="${i + 1}">${i + 1}º Período</option>`)}</select></div></div>
+      <div class="grid gap-3 sm:grid-cols-2"><div><label class="label" for="cg-turma">Turma (ano + semestre)</label><input id="cg-turma" name="turma" class="input" maxlength="6" placeholder="2023B" data-turma-auto="cg-periodo"></div><div><label class="label" for="cg-periodo">Período</label><select id="cg-periodo" name="periodo" class="input"><option value="0">—</option>${Array.from({ length: 12 }, (_, i) => O`<option value="${i + 1}">${i + 1}º Período</option>`)}</select></div></div>
       ${mfSwitch("cg-publico", "globe", "Grupo público", "Qualquer pessoa do MedFisher pode encontrar o grupo e entrar.", !1)}
       ${mfSwitch("cg-convidam", "send", "Membros podem convidar", "Todos os membros veem o link de convite. Se desligado, só você convida.", !0)}</div>`,
     onSubmit: async v => { const g = await ge("mrCriarGrupo", { nome: v.nome, turma: v.turma || "", periodo: Number(v.periodo) || 0, publico: !!v["cg-publico"], convidam: !!v["cg-convidam"] }); be("Grupo criado!", "ok", 2500); location.hash = "#/medrats/g/" + g.id; } }));
@@ -4872,9 +4912,71 @@ var mfVMedRats = { render: async function (r) {
 } };
 
 // ── Convite ──
+/** Período do curso a partir da turma (ano + semestre de entrada). 2023B no 2º semestre de 2026 = 7º período. */
+function mfPeriodoDe(t) {
+  const m = /^\s*((?:19|20)\d{2})\s*[-./]?\s*([ABab12])\s*$/.exec(t || ""); if (!m) return 0;
+  const h = new Date(), sem = h.getMonth() < 6 ? 1 : 2, s0 = "A1".includes(m[2].toUpperCase()) ? 1 : 2;
+  return Math.max(0, Math.min(12, (h.getFullYear() - Number(m[1])) * 2 + (sem - s0) + 1));
+}
+/** Campos de turma com data-turma-auto="id-do-select-de-período" preenchem o período sozinhos (se estiver em branco). */
+document.addEventListener("input", ev => {
+  const t = ev.target, alvo = t && t.dataset && t.dataset.turmaAuto; if (!alvo) return;
+  const sel = (t.closest("dialog, form, #view") || document).querySelector("#" + alvo), n = mfPeriodoDe(t.value);
+  if (sel && n && (sel.value === "0" || sel.dataset.auto === "1")) { sel.value = String(n); sel.dataset.auto = "1"; }
+});
+document.addEventListener("change", ev => { const t = ev.target; t && t.dataset && t.dataset.turmaAuto === void 0 && t.tagName === "SELECT" && (t.dataset.auto = "0"); });
+
+/** Convite aberto por quem ainda não entrou no site: cria a conta (nome = usuário) ou entra, e participa do grupo. */
+async function mfConviteVisitante(r, codigo) {
+  let g; try { g = await ge("conviteInfo", { codigo }, { usuario: "01" }); } catch (x) { r.innerHTML = String($n("link", "Convite inválido", x.message, O`<a href="#/login" class="btn btn-primary mt-5">Entrar</a>`)); return; }
+  let modo = g.vagas > 0 ? "novo" : "entrar";
+  const anoAtual = new Date().getFullYear(), quer = u => String(u || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "") === "luis";
+  function desenhar() {
+    const topo = O`<section class="card text-center">${mfAvatarGrupo({ nome: g.nome, foto: g.foto }, "mx-auto h-20 w-20")}<p class="muted mt-3 text-sm">Você foi convidado para o grupo</p><h1 class="h1">${g.nome}</h1><p class="muted mt-1 text-sm">${Gt(g.membros, "membro", "membros")}${mfTurmaGrupo(g) ? " · " + mfTurmaGrupo(g) : ""}</p></section>`;
+    const novo = O`<form id="cv-novo" class="card space-y-4" novalidate><h2 class="h2">Criar minha conta</h2>
+      <div><label class="label" for="cv-nome">Seu nome</label><input id="cv-nome" name="nome" class="input" maxlength="60" autocomplete="given-name" autocapitalize="words" placeholder="Ex.: Maria Souza"><p class="muted mt-1 text-xs">Seu nome é também o usuário que você digita para entrar nas próximas vezes.</p></div>
+      <div class="grid grid-cols-2 gap-3"><div><label class="label" for="cv-ano">Ano de entrada</label><select id="cv-ano" name="ano" class="input">${Array.from({ length: 12 }, (_, i) => anoAtual - i).map(a => O`<option value="${a}">${a}</option>`)}</select></div>
+        <div><label class="label" for="cv-sem">Semestre</label><select id="cv-sem" name="semestre" class="input"><option value="A">1º semestre</option><option value="B">2º semestre</option></select></div></div>
+      <p class="muted text-xs" id="cv-turma">Turma 2023B</p>
+      <p id="cv-erro" class="hidden text-sm font-medium text-rose-600" role="alert"></p>
+      <button class="btn btn-primary w-full" type="submit" id="cv-ok">Criar conta e entrar no grupo</button>
+      <p class="text-center text-sm"><button type="button" class="underline" data-modo="entrar">Já tenho conta</button></p></form>`;
+    const entrar = O`<form id="cv-entrar-f" class="card space-y-4" novalidate><h2 class="h2">Já tenho conta</h2>
+      <div><label class="label" for="cv-user">Usuário</label><input id="cv-user" name="login" class="input" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30"></div>
+      <div id="cv-senha-wrap" class="hidden"><label class="label" for="cv-senha">Senha</label><input id="cv-senha" name="senha" type="password" class="input" autocomplete="current-password" inputmode="numeric"></div>
+      <p id="cv-erro" class="hidden text-sm font-medium text-rose-600" role="alert"></p>
+      <button class="btn btn-primary w-full" type="submit" id="cv-ok">Entrar e participar</button>
+      ${g.vagas > 0 ? O`<p class="text-center text-sm"><button type="button" class="underline" data-modo="novo">Ainda não tenho conta</button></p>` : O`<p class="muted text-center text-xs">Não há vagas para novas contas no momento. Peça ao Luís para liberar uma.</p>`}</form>`;
+    r.innerHTML = String(O`<div class="mx-auto mt-6 max-w-md space-y-4">${topo}${modo === "novo" ? novo : entrar}</div>`);
+    const atualizaTurma = () => { const el = r.querySelector("#cv-turma"); if (el) el.textContent = `Turma ${r.querySelector("#cv-ano").value}${r.querySelector("#cv-sem").value} (${mfPeriodoDe(r.querySelector("#cv-ano").value + r.querySelector("#cv-sem").value)}º período)`; };
+    atualizaTurma(); jn(r);
+    const f = r.querySelector("#cv-novo") || r.querySelector("#cv-entrar-f"), er = () => r.querySelector("#cv-erro");
+    const falha = (x, b, t) => { const e = er(); e.textContent = x.message; e.classList.remove("hidden"); b.disabled = !1; b.textContent = t; };
+    const entrou = res => { try { res.token ? localStorage.setItem("bq_tok", res.token) : localStorage.removeItem("bq_tok"); } catch {} OC(res.usuario, res.prefs, res.perfil); mfAtualizarTax(); };
+    f.addEventListener("input", ev => { er().classList.add("hidden"); if (ev.target.id === "cv-user") r.querySelector("#cv-senha-wrap").classList.toggle("hidden", !quer(ev.target.value)); });
+    f.addEventListener("change", ev => { if (ev.target.id === "cv-ano" || ev.target.id === "cv-sem") atualizaTurma(); });
+    f.addEventListener("click", ev => { const b = ev.target.closest("[data-modo]"); if (b) { modo = b.dataset.modo; desenhar(); } });
+    f.addEventListener("submit", async ev => {
+      ev.preventDefault(); const b = r.querySelector("#cv-ok"), t = b.textContent; b.disabled = !0; b.textContent = "Aguarde…";
+      try {
+        if (f.id === "cv-novo") {
+          const nome = f.nome.value.trim(); if (!nome) throw new Error("Digite seu nome.");
+          const res = await ge("conviteConta", { codigo, nome, ano: Number(f.ano.value), semestre: f.semestre.value }, { usuario: "01" });
+          entrou(res); be(`Bem-vindo(a), ${res.perfil.nome || res.perfil.login}!`, "ok", 3e3); location.hash = "#/medrats/g/" + res.grupo;
+        } else {
+          const login = f.login.value.trim(); if (!login) throw new Error("Digite seu usuário.");
+          const res = await ge("entrar", { login, senha: quer(login) ? f.senha.value : "" }, { usuario: "01" });
+          entrou(res); be(`Olá, ${res.perfil.nome || res.perfil.login}!`, "ok", 2e3); rw();
+        }
+      } catch (x) { falha(x, b, t); }
+    });
+  }
+  desenhar();
+}
 var mfVConvite = { render: async function (r, { params }) {
+  if (!Ee.usuario) return mfConviteVisitante(r, params.codigo);
   let g; try { g = await ge("mrConvite", { codigo: params.codigo }); } catch (x) { r.innerHTML = String($n("link", "Convite inválido", x.message, O`<a href="#/medrats" class="btn btn-primary mt-5">Ir ao MedRats</a>`)); return; }
-  r.innerHTML = String(O`<div class="mx-auto mt-6 max-w-md"><section class="card text-center">${mfAvatar({ nome: g.nome, foto: g.foto }, "mx-auto h-20 w-20")}<h1 class="h1 mt-3">${g.nome}</h1><p class="muted mt-1 text-sm">${Gt(g.membros, "membro", "membros")}${mfTurmaGrupo(g) ? " · " + mfTurmaGrupo(g) : ""}</p>
+  r.innerHTML = String(O`<div class="mx-auto mt-6 max-w-md"><section class="card text-center">${mfAvatarGrupo({ nome: g.nome, foto: g.foto }, "mx-auto h-20 w-20")}<h1 class="h1 mt-3">${g.nome}</h1><p class="muted mt-1 text-sm">${Gt(g.membros, "membro", "membros")}${mfTurmaGrupo(g) ? " · " + mfTurmaGrupo(g) : ""}</p>
     ${g.jaMembro ? O`<a href="#/medrats/g/${g.id}" class="btn btn-primary mt-5 w-full">Abrir o grupo</a>` : O`<button type="button" id="cv-entrar" class="btn btn-primary mt-5 w-full">Entrar no grupo</button>`}</section></div>`);
   const b = r.querySelector("#cv-entrar");
   b && b.addEventListener("click", async () => { b.disabled = !0; try { const x = await ge("mrEntrar", { codigo: params.codigo }); be("Você entrou no grupo!", "ok", 2500); location.hash = "#/medrats/g/" + x.id; } catch (e) { be(e.message, "erro"); b.disabled = !1; } });
@@ -4943,7 +5045,7 @@ var mfVGrupo = { render: async function (r, { params, query: qy }) {
   }
   function topo() {
     return O`<nav class="muted flex flex-wrap items-center gap-1 text-sm" aria-label="Você está em"><a href="#/medrats" class="hover:underline">MedRats</a><span aria-hidden="true">›</span><span class="font-semibold text-slate-900 dark:text-slate-100">${d.nome}</span></nav>
-      <div class="mt-3 flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 items-center gap-3">${mfAvatar({ nome: d.nome, foto: d.foto }, "h-14 w-14")}<div class="min-w-0"><h1 class="truncate text-2xl font-semibold tracking-tight">${d.nome}</h1><p class="muted text-sm">${Gt(d.ranking.length, "membro", "membros")}${mfTurmaGrupo(d) ? " · " + mfTurmaGrupo(d) : ""}</p></div></div>
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 items-center gap-3">${mfAvatarGrupo({ nome: d.nome, foto: d.foto }, "h-14 w-14")}<div class="min-w-0"><h1 class="truncate text-2xl font-semibold tracking-tight">${d.nome}</h1><p class="muted text-sm">${Gt(d.ranking.length, "membro", "membros")}${mfTurmaGrupo(d) ? " · " + mfTurmaGrupo(d) : ""}</p></div></div>
         <div class="flex items-center gap-2">${d.codigo ? O`<button type="button" class="btn btn-outline" data-convidar><i data-lucide="user-plus" class="h-4 w-4" aria-hidden="true"></i>Convidar amigos</button>` : ""}<button type="button" class="btn btn-outline px-3" data-personalizar aria-label="Personalização" title="Personalização"><i data-lucide="more-vertical" class="h-4 w-4" aria-hidden="true"></i></button></div></div>
       ${d.anterior ? O`<div class="mt-4 flex items-center gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950/30"><i data-lucide="trophy" class="h-6 w-6 shrink-0 text-amber-600" aria-hidden="true"></i>${mfAvatar(d.anterior, "h-9 w-9")}<span><strong>Top 1 da semana:</strong> ${d.anterior.nome} · ${d.anterior.pontos} pontos</span></div>` : ""}`;
   }
@@ -5016,8 +5118,9 @@ var mfVGrupo = { render: async function (r, { params, query: qy }) {
   function personalizar() {
     const adm = d.papel === "admin";
     const prom = pn({ titulo: "Personalização", largo: !0, confirmar: "Fechar", cancelar: null, corpo: O`<div class="space-y-4">
-      ${adm ? O`<section class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><div class="flex items-start gap-3"><button type="button" id="pz-foto-btn" class="relative shrink-0" aria-label="Trocar foto do grupo"><span id="pz-avatar">${mfAvatar({ nome: d.nome, foto: d.foto }, "h-20 w-20")}</span><span class="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-brand text-white"><i data-lucide="pencil" class="h-3.5 w-3.5" aria-hidden="true"></i></span></button><input id="pz-foto" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"><div class="min-w-0 flex-1"><label class="label" for="pz-nome">Nome do grupo</label><div class="flex gap-2"><input id="pz-nome" class="input" maxlength="20" value="${d.nome}"><button type="button" class="btn btn-primary shrink-0" id="pz-atualizar">Atualizar</button></div><p class="mt-1 text-right text-xs muted"><span id="pz-cont">${d.nome.length}</span> / 20</p></div></div>
-        <div class="mt-3 grid gap-3 sm:grid-cols-2"><div><label class="label" for="pz-turma">Turma do grupo (ano + semestre)</label><input id="pz-turma" class="input" maxlength="6" placeholder="2023B" value="${d.turma}"></div><div><label class="label" for="pz-periodo">Período</label><select id="pz-periodo" class="input"><option value="0">—</option>${Array.from({ length: 12 }, (_, i) => O`<option value="${i + 1}" ${d.periodo === i + 1 ? ot("selected") : ""}>${i + 1}º Período</option>`)}</select></div></div></section>` : ""}
+      ${adm ? O`<section class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><div class="flex items-start gap-3"><button type="button" id="pz-foto-btn" class="relative shrink-0" aria-label="Trocar foto do grupo"><span id="pz-avatar">${mfAvatarGrupo({ nome: d.nome, foto: d.foto }, "h-20 w-20")}</span><span class="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-brand text-white"><i data-lucide="pencil" class="h-3.5 w-3.5" aria-hidden="true"></i></span></button><input id="pz-foto" type="file" accept="image/jpeg,image/png,image/webp" class="hidden"><div class="min-w-0 flex-1"><label class="label" for="pz-nome">Nome do grupo</label><div class="flex gap-2"><input id="pz-nome" class="input" maxlength="20" value="${d.nome}"><button type="button" class="btn btn-primary shrink-0" id="pz-atualizar">Atualizar</button></div><p class="mt-1 text-right text-xs muted"><span id="pz-cont">${d.nome.length}</span> / 20</p></div></div>
+        <div class="mt-3"><p class="label">Ícone do grupo</p>${mfGradeIcones(d.foto || "ic:01")}<button type="button" class="btn btn-outline btn-sm mt-2" id="pz-foto-btn2"><i data-lucide="camera" class="h-4 w-4" aria-hidden="true"></i>Enviar uma foto</button></div>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2"><div><label class="label" for="pz-turma">Turma do grupo (ano + semestre)</label><input id="pz-turma" class="input" maxlength="6" placeholder="2023B" data-turma-auto="pz-periodo" value="${d.turma}"></div><div><label class="label" for="pz-periodo">Período</label><select id="pz-periodo" class="input"><option value="0">—</option>${Array.from({ length: 12 }, (_, i) => O`<option value="${i + 1}" ${d.periodo === i + 1 ? ot("selected") : ""}>${i + 1}º Período</option>`)}</select></div></div></section>` : ""}
       <section class="space-y-4 rounded-xl border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-sm font-semibold text-brand dark:text-sky-300">Privacidade do grupo</h3>${mfSwitch("pz-publico", "globe", "Grupo público", "Permita que seu grupo seja encontrado por outras pessoas na página inicial do MedRats.", d.publico, !adm)}${mfSwitch("pz-convidam", "send", "Membros podem convidar", "Todos os membros do grupo podem convidar novos participantes.", d.convidam, !adm)}</section>
       <section class="space-y-4 rounded-xl border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-sm font-semibold text-brand dark:text-sky-300">Ajustes individuais</h3>${mfSwitch("pz-ocultar", "eye-off", "Ocultar minhas atividades", "Suas atividades (aulas, trilhas e baterias) deixam de aparecer neste grupo. Check-ins não são afetados.", d.ajustes.ocultar)}${mfSwitch("pz-silenciar", "bell-off", "Silenciar notificações deste grupo", "Você deixa de receber avisos deste grupo. Ninguém do grupo é avisado.", d.ajustes.silenciar)}</section>
       <button type="button" class="btn btn-outline text-rose-700 dark:text-rose-400" id="pz-sair">Sair do grupo</button></div>` });
@@ -5030,12 +5133,14 @@ var mfVGrupo = { render: async function (r, { params, query: qy }) {
         else if (t.id === "pz-publico" || t.id === "pz-convidam") { await ge("mrAtualizarGrupo", { id: gid, publico: q("#pz-publico").checked, convidam: q("#pz-convidam").checked }); be("Preferência salva.", "ok", 1500); }
         else if (t.id === "pz-foto") {
           const f = t.files[0]; if (!f) return; be("Enviando foto…", "info", 8e3);
-          const id = await mfEnviarFoto(f); await ge("mrAtualizarGrupo", { id: gid, foto: id }); q("#pz-avatar").innerHTML = String(mfAvatar({ nome: d.nome, foto: id }, "h-20 w-20")); be("Foto atualizada.", "ok", 2e3);
+          const id = await mfEnviarFoto(f); await ge("mrAtualizarGrupo", { id: gid, foto: id }); q("#pz-avatar").innerHTML = String(mfAvatarGrupo({ nome: d.nome, foto: id }, "h-20 w-20")); be("Foto atualizada.", "ok", 2e3);
         }
       } catch (x) { be(x.message, "erro", 6e3); }
     });
     dlg.addEventListener("click", async ev => {
-      if (ev.target.closest("#pz-foto-btn")) return q("#pz-foto").click();
+      if (ev.target.closest("#pz-foto-btn, #pz-foto-btn2")) return q("#pz-foto").click();
+      const bi = ev.target.closest("[data-ic]");
+      if (bi) { try { const v = "ic:" + bi.dataset.ic; await ge("mrAtualizarGrupo", { id: gid, foto: v }); d.foto = v; q("#pz-avatar").innerHTML = String(mfAvatarGrupo({ nome: d.nome, foto: v }, "h-20 w-20")); mfMarcarIcone(dlg, bi.dataset.ic); be("Ícone atualizado.", "ok", 1500); } catch (x) { be(x.message, "erro"); } return; }
       if (ev.target.closest("#pz-atualizar")) { try { await ge("mrAtualizarGrupo", { id: gid, nome: q("#pz-nome").value, turma: q("#pz-turma").value.trim(), periodo: Number(q("#pz-periodo").value) || 0 }); be("Grupo atualizado.", "ok", 2e3); } catch (x) { be(x.message, "erro"); } }
       if (ev.target.closest("#pz-sair")) {
         if (!await Ac("Sair deste grupo? Você perde o acesso ao chat e às atividades, mas seus pontos continuam seus.", { confirmar: "Sair", perigo: !0, titulo: "Sair do grupo" })) return;
@@ -5295,7 +5400,7 @@ function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64
         <div class="flex flex-wrap items-center gap-2">${GA(s.filtro)}</div>
         <p class="muted text-xs">${Gt(s.total,"quest\xE3o dispon\xEDvel","quest\xF5es dispon\xEDveis")} · ${s.qtd?"sorteia "+s.qtd:"todas"} · ordem ${s.ordem==="prova"?"por prova":"aleat\xF3ria"}</p>
         <div class="mt-auto flex flex-wrap items-center gap-2"><button type="button" class="btn btn-primary btn-sm" data-iniciar="${s.id}" ${s.total?"":O`disabled`}><i data-lucide="play" class="h-4 w-4" aria-hidden="true"></i>Iniciar</button><button type="button" class="btn btn-outline btn-sm" data-imprimir="${s.id}" ${s.total?"":O`disabled`}><i data-lucide="printer" class="h-4 w-4" aria-hidden="true"></i>Imprimir</button></div>
-      </li>`)}</ul>`:$n("route","Nenhuma trilha ainda","Em Quest\xF5es, combine filtros (ex.: Exantem\xE1ticas + ITU) e use \u201CSalvar como trilha\u201D.",O`<a href="#/questoes" class="btn btn-primary mt-5">Ir para Questões</a>`)}
+      </li>`)}</ul>`:$n("route","Nenhuma trilha ainda","",O`<a href="#/questoes" class="btn btn-primary mt-5">Ir para Questões</a>`)}
   </section>
 
   ${n.sessoes.length?O`<section class="card mt-8" aria-labelledby="t-hist"><h2 id="t-hist" class="h2 mb-3">Histórico de trilhas</h2>
@@ -5493,23 +5598,23 @@ ${a}</section>
           <div class="w-40"><label class="label">Sele\xE7\xE3o</label><select class="input" data-selecao="${B.id}" ${mfPode("provas")?"":ot("disabled")}><option value="">Sem sele\xE7\xE3o</option>${(u.facetas.selecoes||[]).map(x=>O`<option ${x===B.selecao?ot("selected"):""}>${x}</option>`)}</select></div>
           ${mfPode("questoes")&&B.selecao==="Autoral"?O`<a href="#/prova-nova?prova=${B.id}" class="btn btn-outline">Gerenciar questões</a>`:""}${mfPode("provas")?O`<button type="submit" class="btn btn-outline">Salvar</button>`:""}
           <button type="button" class="btn btn-ghost px-2 text-rose-700 dark:text-rose-400" data-excluir-prova="${B.id}" data-nome="${B.instituicao} ${mfAno(B)}${B.rotulo?" \xB7 "+B.rotulo:""}" aria-label="Excluir a prova ${B.instituicao} ${mfAno(B)}${B.rotulo?" \xB7 "+B.rotulo:""}" title="Excluir prova"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button>
-        </form>`)}`:O`<p class="muted text-sm">Nenhuma prova importada ainda.</p>`),jn()}catch(u){i.innerHTML=String(O`<p class="text-sm text-rose-600">${u.message}</p>`)}}i.addEventListener("change",async u=>{let l=u.target.closest("[data-selecao]");if(!l)return;try{await ge("definirSelecao",{provaId:l.dataset.selecao,selecao:l.value}),be("Sele\xE7\xE3o salva.","ok",1800)}catch(B){be(B.message,"erro")}}),i.addEventListener("click",u=>{let l=u.target.closest("[data-excluir-prova]");l&&mfExcluirProva(l.dataset.excluirProva,l.dataset.nome,a)}),i.addEventListener("submit",async u=>{u.preventDefault();let l=u.target,B=l.querySelector("button");B.disabled=!0;try{let d=await ge("renomearProva",{provaId:l.dataset.prova,instituicao:l.inst.value.trim(),ano:/^\d{4}$/.test(l.ano.value)?Number(l.ano.value):void 0});be(`Prova renomeada em ${d.questoes} ${d.questoes===1?"quest\xE3o":"quest\xF5es"}.`,"ok"),await a()}catch(d){be(d.message,"erro",6e3),B.disabled=!1}}),a(),r.querySelector("#p-tema").value=e.tema||"auto";async function o(u){try{Ee.prefs=await ge("salvarPrefs",{prefs:u}),Ys(),be("Prefer\xEAncia salva.","ok",1800)}catch(l){be(l.message,"erro")}}r.querySelector("#p-foco").addEventListener("change",u=>o({ocultarFoco:u.target.checked})),r.querySelector("#p-area").addEventListener("change",u=>o({ocultarArea:u.target.checked})),r.querySelector("#p-tema").addEventListener("change",u=>o({tema:u.target.value})),r.querySelector("#p-fonte").addEventListener("change",u=>o({fonte:u.target.value})),r.querySelector("#b-sair").addEventListener("click",()=>{Ki(),location.hash="#/login",location.reload()})}crypto.randomUUID||(crypto.randomUUID=()=>("10000000-1000-4000-8000"+-1e11).replace(/[018]/g,r=>(r^crypto.getRandomValues(new Uint8Array(1))[0]&15>>r/4).toString(16)));Jv();document.addEventListener("bq:erro-nuvem",r=>be("Falha ao salvar na nuvem: "+(r.detail&&r.detail.message||"verifique as regras do Firestore e a conex\xE3o."),"erro",8e3));var ZA={"mf/medrats":mfVMedRats,"mf/grupo":mfVGrupo,"mf/convite":mfVConvite,"mf/usuarios":mfVUsuarios,"mf/perfil":mfVPerfil,"mf/reclass":mfVReclass,"mf/provanova":mfVNovaProva,"mf/aulas":mfVAulas,"mf/caderno":mfVCaderno,"mf/tax":mfVTax,"./views/login.js":Pg,"./views/dashboard.js":Fg,"./views/questoes.js":Lg,"./views/player.js":Gg,"./views/trilhas.js":qg,"./views/simulados.js":Hg,"./views/relatorio.js":Ug,"./views/importar.js":$g,"./views/ajustes.js":Jg},e1=[{re:/^\/login$/,mod:"./views/login.js",publica:!0,nav:null},{re:/^\/$/,mod:"./views/dashboard.js",nav:"inicio"},{re:/^\/questoes$/,mod:"./views/questoes.js",nav:"questoes"},{re:/^\/favoritas$/,mod:"./views/questoes.js",nav:"favoritas",opcoes:{modo:"favoritas"}},{re:/^\/q\/([^/]+)$/,mod:"./views/player.js",nav:"questoes",player:!0,params:["id"]},{re:/^\/sessao\/([^/]+)$/,mod:"./views/player.js",nav:"simulados",player:!0,params:["sessaoId"]},{re:/^\/trilhas$/,mod:"./views/trilhas.js",nav:"trilhas"},{re:/^\/simulados$/,mod:"./views/simulados.js",nav:"simulados"},{re:/^\/relatorio\/([^/]+)$/,mod:"./views/relatorio.js",nav:"simulados",params:["sessaoId"]},{re:/^\/importar$/,mod:"./views/importar.js",nav:"importar"},{re:/^\/ajustes$/,mod:"./views/ajustes.js",nav:"ajustes"},{re:/^\/aulas$/,mod:"mf/aulas",nav:"aulas"},{re:/^\/caderno$/,mod:"mf/caderno",nav:"focos"},{re:/^\/medrats$/,mod:"mf/medrats",nav:"medrats"},{re:/^\/medrats\/g\/([^/]+)$/,mod:"mf/grupo",nav:"medrats",params:["id"]},{re:/^\/medrats\/convite\/([^/]+)$/,mod:"mf/convite",nav:"medrats",params:["codigo"]},{re:/^\/usuarios$/,mod:"mf/usuarios",nav:"ajustes"},{re:/^\/perfil$/,mod:"mf/perfil",nav:"ajustes"},{re:/^\/reclassificar$/,mod:"mf/reclass",nav:"ajustes"},{re:/^\/prova-nova$/,mod:"mf/provanova",nav:"importar"},{re:/^\/taxonomia$/,mod:"mf/tax",nav:"ajustes"}],nw=[{id:"inicio",href:"#/",icone:"layout-dashboard",rotulo:"In\xEDcio"},{id:"questoes",href:"#/questoes",icone:"list-checks",rotulo:"Quest\xF5es"},{id:"trilhas",href:"#/trilhas",icone:"route",rotulo:"Trilhas"},{id:"simulados",href:"#/simulados",icone:"timer",rotulo:"Simulados"},{id:"aulas",href:"#/aulas",icone:"graduation-cap",rotulo:"Aulas"},{id:"focos",href:"#/caderno",icone:"bookmark",rotulo:"Focos"},{id:"favoritas",href:"#/favoritas",icone:"heart",rotulo:"Favoritas"}],WB=null,cc=0;function t1(){let r=location.hash.replace(/^#/,"")||"/",[e,t]=r.split("?");return{caminho:decodeURI(e)||"/",query:Object.fromEntries(new URLSearchParams(t||""))}}function lc(r){location.hash=r}function YB(){let r=!!Ee.usuario;document.getElementById("shell").innerHTML=String(O`
+        </form>`)}`:O`<p class="muted text-sm">Nenhuma prova importada ainda.</p>`),jn()}catch(u){i.innerHTML=String(O`<p class="text-sm text-rose-600">${u.message}</p>`)}}i.addEventListener("change",async u=>{let l=u.target.closest("[data-selecao]");if(!l)return;try{await ge("definirSelecao",{provaId:l.dataset.selecao,selecao:l.value}),be("Sele\xE7\xE3o salva.","ok",1800)}catch(B){be(B.message,"erro")}}),i.addEventListener("click",u=>{let l=u.target.closest("[data-excluir-prova]");l&&mfExcluirProva(l.dataset.excluirProva,l.dataset.nome,a)}),i.addEventListener("submit",async u=>{u.preventDefault();let l=u.target,B=l.querySelector("button");B.disabled=!0;try{let d=await ge("renomearProva",{provaId:l.dataset.prova,instituicao:l.inst.value.trim(),ano:/^\d{4}$/.test(l.ano.value)?Number(l.ano.value):void 0});be(`Prova renomeada em ${d.questoes} ${d.questoes===1?"quest\xE3o":"quest\xF5es"}.`,"ok"),await a()}catch(d){be(d.message,"erro",6e3),B.disabled=!1}}),a(),r.querySelector("#p-tema").value=e.tema||"auto";async function o(u){try{Ee.prefs=await ge("salvarPrefs",{prefs:u}),Ys(),be("Prefer\xEAncia salva.","ok",1800)}catch(l){be(l.message,"erro")}}r.querySelector("#p-foco").addEventListener("change",u=>o({ocultarFoco:u.target.checked})),r.querySelector("#p-area").addEventListener("change",u=>o({ocultarArea:u.target.checked})),r.querySelector("#p-tema").addEventListener("change",u=>o({tema:u.target.value})),r.querySelector("#p-fonte").addEventListener("change",u=>o({fonte:u.target.value})),r.querySelector("#b-sair").addEventListener("click",()=>{Ki(),location.hash="#/login",location.reload()})}crypto.randomUUID||(crypto.randomUUID=()=>("10000000-1000-4000-8000"+-1e11).replace(/[018]/g,r=>(r^crypto.getRandomValues(new Uint8Array(1))[0]&15>>r/4).toString(16)));Jv();document.addEventListener("bq:erro-nuvem",r=>be("Falha ao salvar na nuvem: "+(r.detail&&r.detail.message||"verifique as regras do Firestore e a conex\xE3o."),"erro",8e3));var ZA={"mf/medrats":mfVMedRats,"mf/grupo":mfVGrupo,"mf/convite":mfVConvite,"mf/usuarios":mfVUsuarios,"mf/perfil":mfVPerfil,"mf/reclass":mfVReclass,"mf/provanova":mfVNovaProva,"mf/aulas":mfVAulas,"mf/caderno":mfVCaderno,"mf/tax":mfVTax,"./views/login.js":Pg,"./views/dashboard.js":Fg,"./views/questoes.js":Lg,"./views/player.js":Gg,"./views/trilhas.js":qg,"./views/simulados.js":Hg,"./views/relatorio.js":Ug,"./views/importar.js":$g,"./views/ajustes.js":Jg},e1=[{re:/^\/login$/,mod:"./views/login.js",publica:!0,nav:null},{re:/^\/$/,mod:"./views/dashboard.js",nav:"inicio"},{re:/^\/questoes$/,mod:"./views/questoes.js",nav:"questoes"},{re:/^\/favoritas$/,mod:"./views/questoes.js",nav:"favoritas",opcoes:{modo:"favoritas"}},{re:/^\/q\/([^/]+)$/,mod:"./views/player.js",nav:"questoes",player:!0,params:["id"]},{re:/^\/sessao\/([^/]+)$/,mod:"./views/player.js",nav:"simulados",player:!0,params:["sessaoId"]},{re:/^\/trilhas$/,mod:"./views/trilhas.js",nav:"trilhas"},{re:/^\/simulados$/,mod:"./views/simulados.js",nav:"simulados"},{re:/^\/relatorio\/([^/]+)$/,mod:"./views/relatorio.js",nav:"simulados",params:["sessaoId"]},{re:/^\/importar$/,mod:"./views/importar.js",nav:"importar"},{re:/^\/ajustes$/,mod:"./views/ajustes.js",nav:"ajustes"},{re:/^\/aulas$/,mod:"mf/aulas",nav:"aulas"},{re:/^\/caderno$/,mod:"mf/caderno",nav:"focos"},{re:/^\/medrats$/,mod:"mf/medrats",nav:"medrats"},{re:/^\/medrats\/g\/([^/]+)$/,mod:"mf/grupo",nav:"medrats",params:["id"]},{re:/^\/medrats\/convite\/([^/]+)$/,mod:"mf/convite",nav:"medrats",params:["codigo"],publica:!0},{re:/^\/usuarios$/,mod:"mf/usuarios",nav:"ajustes"},{re:/^\/perfil$/,mod:"mf/perfil",nav:"ajustes"},{re:/^\/reclassificar$/,mod:"mf/reclass",nav:"ajustes"},{re:/^\/prova-nova$/,mod:"mf/provanova",nav:"importar"},{re:/^\/taxonomia$/,mod:"mf/tax",nav:"ajustes"}],nw=[{id:"inicio",href:"#/",icone:"layout-dashboard",rotulo:"In\xEDcio"},{id:"questoes",href:"#/questoes",icone:"list-checks",rotulo:"Quest\xF5es"},{id:"trilhas",href:"#/trilhas",icone:"route",rotulo:"Trilhas"},{id:"simulados",href:"#/simulados",icone:"timer",rotulo:"Simulados"},{id:"aulas",href:"#/aulas",icone:"graduation-cap",rotulo:"Aulas"},{id:"focos",href:"#/caderno",icone:"bookmark",rotulo:"Focos"},{id:"favoritas",href:"#/favoritas",icone:"heart",rotulo:"Favoritas"}],WB=null,cc=0;function t1(){let r=location.hash.replace(/^#/,"")||"/",[e,t]=r.split("?");return{caminho:decodeURI(e)||"/",query:Object.fromEntries(new URLSearchParams(t||""))}}function lc(r){location.hash=r}function YB(){let r=!!Ee.usuario;document.getElementById("shell").innerHTML=String(O`
   <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-    <div class="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
-      <a href="#/" class="flex items-center gap-2 font-semibold tracking-tight"><img src="logo-peixe.png" alt="" width="28" height="28" class="h-7 w-7 dark:invert"><span>MedFisher</span></a>
+    <div class="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-4">
+      <a href="#/" class="flex shrink-0 items-center gap-2 font-semibold tracking-tight"><img src="logo-peixe.png" alt="" width="28" height="28" class="h-7 w-7 dark:invert"><span>MedFisher</span></a>
       ${r?O`
-      <nav class="ml-4 hidden items-center gap-1 md:flex" aria-label="Principal">
+      <nav class="ml-4 hidden items-center gap-1 lg:flex" aria-label="Principal">
         ${nw.map(t=>O`<a href="${t.href}" data-nav="${t.id}" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">${t.rotulo}</a>`)}
       </nav>
-      <div class="ml-auto flex items-center gap-1">
-        <a href="#/medrats" data-nav="medrats" class="btn btn-ghost btn-sm" title="MedRats"><i data-lucide="rocket" class="h-4 w-4" aria-hidden="true"></i><span class="hidden sm:inline">MedRats</span></a>
-        <a href="#/importar" data-nav="importar" class="btn btn-ghost btn-sm" title="Importar questões"><i data-lucide="upload" class="h-4 w-4" aria-hidden="true"></i><span class="hidden sm:inline">Importar</span></a>
-        <a href="#/ajustes" data-nav="ajustes" class="btn btn-ghost btn-sm" title="Ajustes"><i data-lucide="settings" class="h-4 w-4" aria-hidden="true"></i><span class="sr-only">Ajustes</span></a>
-        <button type="button" id="btn-sair" class="btn btn-outline btn-sm" title="Trocar de usuário"><i data-lucide="user-round" class="h-4 w-4" aria-hidden="true"></i><span class="max-w-[9rem] truncate">${mfRotuloUsuario()}</span></button>
+      <div class="ml-auto flex min-w-0 items-center gap-0.5 sm:gap-1">
+        <a href="#/medrats" data-nav="medrats" class="btn btn-ghost btn-sm max-sm:px-2" title="MedRats"><i data-lucide="rocket" class="h-4 w-4" aria-hidden="true"></i><span class="hidden xl:inline">MedRats</span></a>
+        <a href="#/importar" data-nav="importar" class="btn btn-ghost btn-sm max-sm:px-2" title="Importar questões"><i data-lucide="upload" class="h-4 w-4" aria-hidden="true"></i><span class="hidden xl:inline">Importar</span></a>
+        <a href="#/ajustes" data-nav="ajustes" class="btn btn-ghost btn-sm max-sm:px-2" title="Ajustes"><i data-lucide="settings" class="h-4 w-4" aria-hidden="true"></i><span class="sr-only">Ajustes</span></a>
+        <button type="button" id="btn-sair" class="btn btn-outline btn-sm min-w-0 max-sm:gap-1 max-sm:px-2.5" title="Trocar de usuário"><i data-lucide="user-round" class="h-4 w-4 shrink-0" aria-hidden="true"></i><span class="max-w-[4.5rem] truncate sm:max-w-[9rem] lg:max-w-[6.5rem] xl:max-w-[9rem]">${mfRotuloUsuario()}</span></button>
       </div>`:""}
     </div>
   </header>
-  ${r?O`<nav id="bottom-nav" class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-950/95" aria-label="Principal (celular)">
+  ${r?O`<nav id="bottom-nav" class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-950/95" aria-label="Principal (celular)">
     <ul class="mx-auto grid max-w-lg grid-cols-7">
       ${nw.map(t=>O`<li><a href="${t.href}" data-nav="${t.id}" class="flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-slate-600 dark:text-slate-400"><i data-lucide="${t.icone}" class="h-5 w-5" aria-hidden="true"></i>${t.rotulo}</a></li>`)}
     </ul></nav>`:""}`);let e=document.getElementById("btn-sair");e&&e.addEventListener("click",()=>{Ki(),lc("#/login"),YB()}),jn()}function n1(r){document.querySelectorAll("[data-nav]").forEach(e=>{let t=e.dataset.nav===r;t?e.setAttribute("aria-current","page"):e.removeAttribute("aria-current"),e.classList.toggle("text-brand",t),e.classList.toggle("dark:text-sky-300",t),e.closest("#bottom-nav")?e.classList.toggle("font-semibold",t):(e.classList.toggle("bg-slate-100",t),e.classList.toggle("dark:bg-slate-800",t))})}async function rw(){let r=++cc;if(WB){try{WB()}catch{}WB=null}let{caminho:e,query:t}=t1(),n=e1.find(l=>l.re.test(e)),s=document.getElementById("view");if(!n){s.innerHTML=String(O`<div class="card">Página não encontrada. <a class="underline" href="#/">Voltar ao início</a></div>`);return}if(!n.publica&&!Ee.usuario){lc("#/login");return}if(n.publica&&Ee.usuario&&e==="/login"){lc("#/");return}document.getElementById("bottom-nav")!==null!==!!Ee.usuario&&YB(),document.body.dataset.rota=n.player?"player":"",n1(n.nav);let a={},o=e.match(n.re);(n.params||[]).forEach((l,B)=>{a[l]=decodeURIComponent(o[B+1])});let u=document.createElement("div");u.innerHTML=String(Wi(3)),s.replaceChildren(u),setTimeout(()=>{r===cc&&s.contains(u)&&u.insertAdjacentHTML("beforeend",'<p class="muted mt-4 text-sm" role="alert">Est\xE1 demorando para carregar. Confira a internet e se as regras do Firestore est\xE3o publicadas; se persistir, recarregue com Ctrl+F5.</p>')},12e3);try{let l=ZA[n.mod];if(r!==cc)return;let B=document.createElement("div");B.className="view-in",s.replaceChildren(B);let d=await l.render(B,{params:a,query:t,opcoes:n.opcoes||{},navegar:lc});if(r!==cc){typeof d=="function"&&d();return}typeof d=="function"&&(WB=d),jn(),window.scrollTo(0,0)}catch(l){if(r!==cc)return;console.error(l),s.innerHTML=String(O`<div class="card border-rose-300"><p class="font-semibold text-rose-700 dark:text-rose-400">Algo deu errado</p><p class="muted mt-1 text-sm">${l.message}</p><button class="btn btn-outline btn-sm mt-3" onclick="location.reload()">Recarregar</button></div>`)}}async function r1(){Ys();try{await FC()}catch(r){be(r.message,"erro",8e3)}if(Ee.usuario&&uo())try{let r=await ge("login");Ee.prefs=r.prefs||{},Ee.perfil=r.perfil||null,Ys(),mfAtualizarTax()}catch(r){r.codigo==="auth"&&Ki()}YB(),window.addEventListener("hashchange",rw),document.addEventListener("bq:auth-expirou",()=>{Ki(),YB(),be("Sess\xE3o inv\xE1lida. Entre novamente.","erro"),lc("#/login")}),document.addEventListener("bq:prefs",()=>Ys()),location.hash||(location.hash=Ee.usuario?"#/":"#/login"),rw()}r1();function sw(r){let e=document.getElementById("banner-erro");e||(e=document.createElement("div"),e.id="banner-erro",e.className="fixed inset-x-0 top-0 z-[60] bg-rose-700 px-4 py-2 text-xs text-white",e.addEventListener("click",()=>e.remove()),document.body.append(e)),e.textContent="Erro: "+r+" (toque para fechar)"}window.addEventListener("error",r=>sw(r.message||"desconhecido"));window.addEventListener("unhandledrejection",r=>sw(r.reason&&r.reason.message||String(r.reason)));window.__instalar=null;window.addEventListener("beforeinstallprompt",r=>{r.preventDefault(),window.__instalar=r,document.dispatchEvent(new CustomEvent("bq:pode-instalar"))});window.addEventListener("appinstalled",()=>{window.__instalar=null,document.dispatchEvent(new CustomEvent("bq:pode-instalar"))});"serviceWorker"in navigator&&/^https?:$/.test(location.protocol)&&window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));})();

@@ -5,7 +5,10 @@
  *  1. Acesse script.google.com → Novo projeto → cole este arquivo.
  *  2. Implantar → Nova implantação → tipo "Aplicativo da Web".
  *       Executar como: Eu (a conta dona da pasta)   |   Quem pode acessar: Qualquer pessoa
- *  3. Autorize o acesso ao Drive e copie a URL do aplicativo (termina em /exec).
+ *  3. AUTORIZE O DRIVE (passo que costuma faltar): no editor, escolha a função "autorizar" na barra
+ *     superior, clique em Executar e aceite as permissões. Depois: Implantar → Gerenciar implantações →
+ *     lápis → Versão: "Nova versão" → Implantar. Sem isso as fotos falham com "Access denied: DriveApp".
+ *     Copie a URL do aplicativo (termina em /exec).
  *  4. No topo do index.html, em window.CONFIG, preencha:  FOTOS_URL: 'https://script.google.com/macros/s/.../exec'
  *
  * As fotos ficam na pasta abaixo e são compartilhadas como "qualquer pessoa com o link pode ver",
@@ -32,6 +35,12 @@ function doPost(e) {
   } catch (err) {
     return saida({ ok: false, erro: String(err.message || err) });
   }
+}
+
+/** Execute uma vez no editor para conceder a permissão de Drive ao script. */
+function autorizar() {
+  var pasta = DriveApp.getFolderById(PASTA_ID);
+  Logger.log('Autorizado. Pasta: ' + pasta.getName());
 }
 
 function doGet() { return saida({ ok: true, servico: 'MedRats fotos' }); }
