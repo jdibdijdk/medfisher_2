@@ -3705,8 +3705,13 @@ function mfPartesResposta(ans) {
 /** Cabeçalho da questão: primeiro "Autoral" ou "UEPA"; o nome do professor só aparece depois da resposta. */
 function mfRotuloOrigem(M, mostrarProf) {
   if (M.selecaoProva === "Autoral" && !mfAno(M)) return "Autoral";   // Autoral avulsa (sem turma)
-  if (M.selecaoProva === "UEPA") return M.instituicao + (mostrarProf && M.provaNome ? " · " + M.provaNome : "");
+  if (M.selecaoProva === "UEPA") return M.instituicao;
   return `${M.instituicao} - ${mfAno(M)}${M.selecaoRotulo ? " \xB7 " + M.selecaoRotulo : ""}`;
+}
+/** Chips da prova; na UEPA, o professor aparece num chip ao lado (mesmo estilo), depois da resposta. */
+function mfChipsOrigem(M, mostrarProf) {
+  const prof = M.selecaoProva === "UEPA" && mostrarProf && M.provaNome;
+  return O`${kC("graduation-cap", mfRotuloOrigem(M, mostrarProf))}${prof ? kC("user", M.provaNome) : ""}`;
 }
 function mfRenderPartes(M, ce, V, ans) {
   const st = mfPartesCarregar(M), N = M.alternativas.length;
@@ -3745,7 +3750,7 @@ function mfRenderPartes(M, ce, V, ans) {
     }
   }
   const cab = O`<div class="card"><div class="flex items-start justify-between gap-2"><h1 class="text-lg font-bold text-brand dark:text-slate-100">Questão ${M.numero}</h1>${mfAdmin() ? O`<button type="button" id="b-editq" class="btn btn-ghost btn-sm" aria-label="Editar questão" title="Editar questão"><i data-lucide="pencil" class="h-4 w-4" aria-hidden="true"></i></button>` : ""}</div>
-    <div class="mt-2 flex flex-wrap items-center gap-2">${kC("graduation-cap", mfRotuloOrigem(M, mostrarProf))}${mfCaminho(M)}</div>
+    <div class="mt-2 flex flex-wrap items-center gap-2">${mfChipsOrigem(M, mostrarProf)}${mfCaminho(M)}</div>
     <div class="texto-questao mt-4 text-[15px] leading-relaxed">${mfFmt(M.enunciado)}</div>${imgs("enunciado")}</div>`;
   const fim = (feito || st.finalizado) ? O`<section class="card space-y-3"><p class="h2">Comentário</p>${M.comentario ? O`<div class="texto-questao text-[15px] leading-relaxed">${mfFmt(M.comentario)}</div>` : O`<p class="muted text-sm">Sem comentário final.</p>`}${imgs("comentario")}${feito ? O`<button type="button" class="btn btn-ghost btn-sm" data-pt="refazer"><i data-lucide="rotate-ccw" class="h-4 w-4" aria-hidden="true"></i>Responder de novo</button>` : ""}</section>` : "";
   ce.innerHTML = String(O`<div class="space-y-4">${cab}${blocos}${fim}</div>`);
@@ -5691,7 +5696,7 @@ function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64
         <div class="min-w-0">
           <h1 class="text-lg font-bold text-brand dark:text-slate-100">Questão ${M.numero}</h1>
           <div class="mt-2 flex flex-wrap items-center gap-2">
-            ${kC("graduation-cap",mfRotuloOrigem(M,!!ye))}
+            ${mfChipsOrigem(M,!!ye)}
             ${mfCaminho(M,Lt)}
             
             ${M.anulada?O`<span class="chip" style="--bg:#F1F5F9;--fg:#475569"><i data-lucide="ban" aria-hidden="true"></i>Anulada</span>`:""}
