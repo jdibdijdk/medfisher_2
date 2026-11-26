@@ -3432,9 +3432,51 @@ function mfCamposQuestao(q) {
   ${mfCamposTax(q, Yr)}`;
 }
 /** Abre o editor da questão (usuário 02). aposSalvar recebe a questão atualizada. */
+/** Posições possíveis de uma imagem, conforme o tipo da questão. */
+function mfPosicoesQ(tipo, n) {
+  const base = [["enunciado", "No enunciado"], ["comentario", "Na resolução"]];
+  if (tipo === "partes") return [...base, ...Array.from({ length: n }, (_, i) => ["alternativa_" + "ABCDEFGHIJ"[i], "No comando " + "ABCDEFGHIJ"[i]])];
+  if (tipo === "objetiva") return [...base, ...MF_LETRAS.map(l => ["alternativa_" + l, "Na alternativa " + l])];
+  return base;
+}
+function mfDesenharFotos(ul, fotos, opcoes) {
+  ul.innerHTML = String(O`${fotos.map((m, k) => O`<li class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-2 dark:border-slate-700">${m.url ? O`<img src="${m.url}" alt="" class="h-14 w-14 rounded-lg object-cover">` : O`<span class="muted flex h-14 w-14 items-center justify-center rounded-lg bg-slate-100 text-[10px] dark:bg-slate-800">foto</span>`}
+    <select class="input w-auto py-1.5 text-xs" data-fp-pos="${k}">${opcoes.map(([v, t]) => O`<option value="${v}" ${v === m.pos ? ot("selected") : ""}>${t}</option>`)}</select>
+    <input class="input min-w-[8rem] flex-1 py-1.5 text-xs" data-fp-leg="${k}" maxlength="200" placeholder="Legenda (opcional)" value="${m.leg || ""}">
+    <button type="button" class="btn btn-ghost btn-sm px-2" data-fp-rem="${k}" aria-label="Remover foto" title="Remover"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i></button></li>`)}`);
+  jn(ul);
+}
+/** Liga a lista de imagens de um diálogo. Devolve a função que redesenha a lista (chame quando o tipo ou os comandos mudarem). */
+function mfLigarFotos(dlg, fotos, opcoesFn) {
+  const pintar = () => {
+    const o = opcoesFn(), ul = dlg.querySelector("#fp-imgs");
+    fotos.forEach(m => { if (!o.some(([v]) => v === m.pos)) m.pos = "enunciado"; });
+    if (ul) mfDesenharFotos(ul, fotos, o);
+  };
+  dlg.addEventListener("change", ev => {
+    const t = ev.target;
+    if (t.id === "fp-input") { [...t.files].forEach((f, k) => fotos.push({ file: f, arquivo: mfNomeImg(f, k), pos: "enunciado", leg: "", fileId: "", url: URL.createObjectURL(f) })); t.value = ""; pintar(); }
+    if (t.dataset.fpPos !== void 0) fotos[Number(t.dataset.fpPos)].pos = t.value;
+  });
+  dlg.addEventListener("input", ev => { if (ev.target.dataset.fpLeg !== void 0) fotos[Number(ev.target.dataset.fpLeg)].leg = ev.target.value; });
+  dlg.addEventListener("click", ev => { const b = ev.target.closest("[data-fp-rem]"); if (b) { fotos.splice(Number(b.dataset.fpRem), 1); pintar(); } });
+  return pintar;
+}
+/** Bloco "Imagens" do formulário de questão. */
+function mfBlocoFotosQ() {
+  return O`<div><label class="label" for="fp-input">Imagens <span class="muted font-normal">(opcional)</span></label><input id="fp-input" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" class="input py-1.5"><ul id="fp-imgs" class="mt-3 space-y-2"></ul></div>`;
+}
+/** Envia as imagens que ainda não estão no servidor. Devolve os nomes que falharam. */
+async function mfEnviarFotosQ(qid, paraUpload, fotos) {
+  const falhas = [];
+  for (const up of paraUpload || []) { const m = fotos.find(x => x.arquivo === up.arquivo); if (m && m.file) try { await mfUploadImgQuestao(qid, up.arquivo, m.file); } catch { falhas.push(m.file.name); } }
+  return falhas;
+}
 /** Edição de questão em partes (enunciado, comandos com resolução e comentário final). */
 function mfEditarPartes(q, aposSalvar) {
+  const fotos = (q.imagens || []).map(m => ({ arquivo: m.arquivo, pos: m.posicao, leg: m.legenda || "", fileId: m.fileId || "", url: "", file: null }));
   const corpo = O`<div class="space-y-4"><div><label class="label" for="e-enun">Enunciado</label><textarea id="e-enun" name="enunciado" class="input" rows="5" required>${q.enunciado}</textarea></div>
+    ${mfBlocoFotosQ()}
     <div id="cq-partes" class="space-y-3">${q.alternativas.map((a, i) => O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700" data-parte="${i}"><p class="label mb-2">Comando ${a.letra}</p>
       <label class="label" for="cq-cmd-${i}">Comando</label><textarea id="cq-cmd-${i}" name="cmd_${i}" class="input" rows="3">${a.texto}</textarea>
       <div class="mb-1 mt-2 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="cq-res-${i}">Resolução do comando ${a.letra} <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("cq-res-" + i)}</div>
@@ -3448,17 +3490,21 @@ function mfEditarPartes(q, aposSalvar) {
     const n = Object.keys(v).filter(k => /^cmd_\d+$/.test(k)).length;
     const alternativas = Array.from({ length: n }, (_, i) => ({ texto: String(v["cmd_" + i] || "").trim(), comentario: String(v["res_" + i] || "").trim() }));
     if (!n || alternativas.some(x => !x.texto)) throw new Error("Escreva o texto de todos os comandos.");
-    const nova = await ge("editarQuestao", { id: q.id, enunciado: v.enunciado, alternativas, gabarito: "", anulada: !!v.anulada, comentario: v.comentario || "", area: v.area, subarea: v.subarea, foco: v.foco, imagens: (q.imagens || []).map(m => ({ arquivo: m.arquivo, posicao: m.posicao, legenda: m.legenda || "" })) });
-    be("Questão atualizada.", "ok", 3000);
+    const nova = await ge("editarQuestao", { id: q.id, enunciado: v.enunciado, alternativas, gabarito: "", anulada: !!v.anulada, comentario: v.comentario || "", area: v.area, subarea: v.subarea, foco: v.foco, imagens: fotos.map(m => ({ arquivo: m.arquivo, posicao: m.pos, legenda: m.leg || "" })) });
+    const falhas = await mfEnviarFotosQ(q.id, nova.paraUpload, fotos);
+    be(falhas.length ? `Questão salva, mas não foi possível enviar: ${falhas.join(", ")}` : "Questão atualizada.", falhas.length ? "erro" : "ok", 4000);
     aposSalvar && await aposSalvar(nova);
   } }, q);
   const dlg = mfDialogoTopo();
+  const pintar = mfLigarFotos(dlg, fotos, () => mfPosicoesQ("partes", dlg.querySelectorAll("[data-parte]").length));
   dlg.addEventListener("click", ev => {
     const box = dlg.querySelector("#cq-partes");
     if (!box) return;
-    if (ev.target.closest("#cq-add-parte")) { box.insertAdjacentHTML("beforeend", String(mfParteCQ(box.children.length))); jn(box); }
-    if (ev.target.closest("#cq-rem-parte") && box.children.length > 1) box.lastElementChild.remove();
+    if (ev.target.closest("#cq-add-parte")) { box.insertAdjacentHTML("beforeend", String(mfParteCQ(box.children.length))); jn(box); pintar(); }
+    if (ev.target.closest("#cq-rem-parte") && box.children.length > 1) { box.lastElementChild.remove(); pintar(); }
   });
+  pintar();
+  fotos.forEach(async m => { if (m.fileId && window.__imagem) { try { m.url = (await window.__imagem(m.fileId)) || ""; pintar(); } catch {} } });
   return prom;
 }
 async function mfEditarQuestao(id, aposSalvar) {
@@ -4141,6 +4187,7 @@ function mfCorpoCQ(pre) {
     <div id="cq-prof-wrap" class="${pre.destino === "uepa" ? "" : "hidden"}"><label class="label" for="cq-prof">Professor</label><input id="cq-prof" name="professor" class="input" maxlength="120" list="cq-profs" placeholder="Ex.: Prof. Fulano" autocomplete="off" value="${pre.professor || ""}"><datalist id="cq-profs">${(pre.profs || []).map(x => O`<option value="${x}"></option>`)}</datalist><p class="muted mt-1 text-xs">Escolha um professor já cadastrado ou digite um novo. Você pode voltar depois e acrescentar questões ao mesmo professor, em focos diferentes.</p></div>
     ${mfCamposTax(pre)}
     <div><label class="label" for="cq-enun">Enunciado</label><textarea id="cq-enun" name="enunciado" class="input" rows="5" required></textarea></div>
+    ${mfBlocoFotosQ()}
     <fieldset class="flex flex-wrap gap-4 text-sm"><legend class="label">Tipo</legend>
       <label class="flex items-center gap-2"><input type="radio" name="tipo" value="objetiva" class="accent-brand" checked>Objetiva</label>
       <label class="flex items-center gap-2"><input type="radio" name="tipo" value="discursiva" class="accent-brand">Discursiva</label>
@@ -4154,6 +4201,7 @@ async function mfCriarQuestaoAbrir() {
   let profs = [];
   try { const u = await ge("listarQuestoes", { facetas: true, tamanho: 1 }); profs = [...new Set(((u.facetas || {}).provas || []).filter(p => p.selecao === "UEPA").map(p => p.rotulo).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")); } catch {}
   const pre = { ...mfUltimoCQ, profs };
+  const fotos = [];
   mfModalTax({ titulo: "Criar questão", largo: !0, confirmar: "Salvar questão", corpo: mfCorpoCQ(pre), onSubmit: async v => {
     v = await mfResolverFoco(v);
     const destino = v.destino === "uepa" ? "uepa" : "autoral", profe = String(v.professor || "").trim().replace(/\s+/g, " ");
@@ -4171,21 +4219,25 @@ async function mfCriarQuestaoAbrir() {
       pl.partes = Array.from({ length: n }, (_, i) => ({ comando: String(v["cmd_" + i] || "").trim(), resolucao: String(v["res_" + i] || "").trim() }));
       if (!pl.partes.length || pl.partes.some(x => !x.comando)) throw new Error("Escreva o texto de todos os comandos.");
     }
-    await ge("criarQuestao", pl);
+    pl.imagens = fotos.map(m => ({ arquivo: m.arquivo, posicao: m.pos, legenda: m.leg || "" }));
+    const r = await ge("criarQuestao", pl);
+    const falhas = await mfEnviarFotosQ(r.id, r.paraUpload, fotos);
     mfUltimoCQ = { destino, professor: profe, area: v.area, subarea: v.subarea, foco: v.foco };
-    be("Questão criada. Para adicionar outra, use Criar questão de novo: o destino e o foco ficam preenchidos.", "ok", 4000);
+    be(falhas.length ? `Questão criada, mas não foi possível enviar: ${falhas.join(", ")}` : "Questão criada. Para adicionar outra, use Criar questão de novo: o destino e o foco ficam preenchidos.", falhas.length ? "erro" : "ok", 5000);
   } }, pre);
   const dlg = mfDialogoTopo();
+  const tipoAtual = () => { const r = dlg.querySelector("input[name=tipo]:checked"); return r ? r.value : "objetiva"; };
+  const pintar = mfLigarFotos(dlg, fotos, () => mfPosicoesQ(tipoAtual(), dlg.querySelectorAll("[data-parte]").length));
   dlg.addEventListener("change", ev => {
     const t = ev.target;
     if (t.name === "destino") dlg.querySelector("#cq-prof-wrap").classList.toggle("hidden", t.value !== "uepa");
-    if (t.name === "tipo") { dlg.querySelector("#cq-tipo").innerHTML = String(mfTipoCQ(t.value, 2)); jn(dlg); }
+    if (t.name === "tipo") { dlg.querySelector("#cq-tipo").innerHTML = String(mfTipoCQ(t.value, 2)); jn(dlg); pintar(); }
   });
   dlg.addEventListener("click", ev => {
     const box = dlg.querySelector("#cq-partes");
     if (!box) return;
-    if (ev.target.closest("#cq-add-parte")) { box.insertAdjacentHTML("beforeend", String(mfParteCQ(box.children.length))); jn(box); }
-    if (ev.target.closest("#cq-rem-parte") && box.children.length > 1) box.lastElementChild.remove();
+    if (ev.target.closest("#cq-add-parte")) { box.insertAdjacentHTML("beforeend", String(mfParteCQ(box.children.length))); jn(box); pintar(); }
+    if (ev.target.closest("#cq-rem-parte") && box.children.length > 1) { box.lastElementChild.remove(); pintar(); }
   });
 }
 document.addEventListener("click", ev => { if (ev.target.closest && ev.target.closest("#cad-criar-questao")) mfCriarQuestaoAbrir(); });
