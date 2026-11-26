@@ -4862,8 +4862,10 @@ async function mfEnviarFoto(file) {
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
   const blob = await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.85));
   const dados = QA(await blob.arrayBuffer());
-  const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ acao: "foto", nome: file.name.replace(/\.[^.]+$/, ""), mime: "image/jpeg", dados, chave: (window.CONFIG || {}).FOTOS_CHAVE || "" }), redirect: "follow" });
-  let j; try { j = await resp.json(); } catch { throw new Error("Não foi possível enviar a foto agora. Tente de novo."); }
+  let resp;
+  try { resp = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ acao: "foto", nome: file.name.replace(/\.[^.]+$/, ""), mime: "image/jpeg", dados, chave: (window.CONFIG || {}).FOTOS_CHAVE || "" }), redirect: "follow" }); }
+  catch (e) { throw new Error("Não consegui falar com o Apps Script das fotos. Confira se FOTOS_URL termina em /exec e se a implantação está com acesso “Qualquer pessoa”. (Detalhe: " + (e && e.message ? e.message : "falha de rede") + ")"); }
+  let j; try { j = await resp.json(); } catch { throw new Error(`O Apps Script respondeu HTTP ${resp.status} sem JSON. Verifique se FOTOS_URL é a URL da implantação atual e se o código tem a função doPost.`); }
   if (!j.ok) throw new Error(/DriveApp|Access denied|authoriz|autoriz/i.test(j.erro || "") ? "O script do Drive ainda não foi autorizado. No Apps Script, execute a função autorizar() uma vez e publique uma nova versão da implantação." : j.erro || "Não foi possível enviar a foto.");
   return j.id;
 }
