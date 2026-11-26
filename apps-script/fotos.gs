@@ -11,8 +11,9 @@
  *     Copie a URL do aplicativo (termina em /exec).
  *  4. No topo do index.html, em window.CONFIG, preencha:  FOTOS_URL: 'https://script.google.com/macros/s/.../exec'
  *
- * As fotos ficam na pasta abaixo e são compartilhadas como "qualquer pessoa com o link pode ver",
- * para o site conseguir exibi-las. Não há limite de armazenamento no Firebase para isso.
+ * As fotos ficam na pasta abaixo. Para o site exibi-las, a PASTA precisa estar em
+ * "Qualquer pessoa com o link" como LEITOR (não Editor). Os arquivos herdam esse acesso.
+ * Não há limite de armazenamento no Firebase para isso.
  */
 var PASTA_ID = '1PuieHM5YdAYp6gJaBLl36_hJRB_oqMOJ';
 var MAX_BYTES = 4 * 1024 * 1024;
@@ -30,7 +31,9 @@ function doPost(e) {
     var ext = req.mime === 'image/png' ? '.png' : req.mime === 'image/webp' ? '.webp' : '.jpg';
     var nome = String(req.nome || 'foto').replace(/[^\w.-]+/g, '_').slice(0, 60) + '-' + Date.now() + ext;
     var arquivo = DriveApp.getFolderById(PASTA_ID).createFile(Utilities.newBlob(bytes, req.mime, nome));
-    arquivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    // A foto já está salva. Se o Drive recusar mudar o compartilhamento do arquivo, isso não é erro:
+    // o arquivo herda o acesso por link da pasta (configure a pasta como "Qualquer pessoa com o link: Leitor").
+    try { arquivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { /* herda da pasta */ }
     return saida({ ok: true, id: arquivo.getId() });
   } catch (err) {
     return saida({ ok: false, erro: String(err.message || err) });
