@@ -162,7 +162,7 @@ var ABAS = {
   MR_Curtidas: { cols: ['post_id', 'grupo_id', 'usuario', 'criado_em'], num: [] },
   MR_Comentarios: { cols: ['id', 'post_id', 'grupo_id', 'usuario', 'texto', 'criado_em'], num: [] },
   MR_Palpites: { cols: ['post_id', 'grupo_id', 'usuario', 'alternativa', 'criado_em'], num: [] },
-  MR_Pontos: { cols: ['usuario', 'semana', 'pontos', 'motivo', 'ref', 'criado_em'], num: ['pontos'] },
+  MR_Pontos: { cols: ['usuario', 'semana', 'pontos', 'motivo', 'ref', 'criado_em', 'grupo'], num: ['pontos'] },
   AulasVistas: { cols: ['usuario', 'aula_id', 'primeira', 'ultima', 'vezes', 'concluida'], num: ['vezes', 'concluida'] },
   Subfocos: { cols: ['id', 'area', 'subarea', 'foco', 'nome', 'ordem', 'criado_em'], num: ['ordem'] },
 };
@@ -300,6 +300,7 @@ var ACOES = {
   mrConvite: mrConvite_,
   mrEntrar: mrEntrar_,
   mrSair: mrSair_,
+  mrApagarGrupo: mrApagarGrupo_,
   mrAjustes: mrAjustes_,
   mrFeed: mrFeed_,
   mrChat: mrChat_,
@@ -2094,22 +2095,27 @@ function mrExigirMembro_(gid, u) {
   return m;
 }
 
-// ── Pontos (um só livro-caixa por pessoa; a semana vai de segunda a domingo) ──
+// ── Pontos: cada grupo tem o seu próprio placar (a semana vai de segunda a domingo) ──
+/** grupo -> semana -> usuario -> pontos. Linhas sem grupo (de antes desta regra) não contam. */
 function mrPontosTodos_() {
-  var out = {};   // semana -> usuario -> pontos
+  var out = {};
   lerTudo_('MR_Pontos').forEach(function (r) {
-    var s = String(r[1]), u = String(r[0]);
-    (out[s] = out[s] || {})[u] = (out[s][u] || 0) + (Number(r[2]) || 0);
+    var g = String(r[6] || ''), s = String(r[1]), u = String(r[0]);
+    if (!g) return;
+    var gs = out[g] = out[g] || {}, ss = gs[s] = gs[s] || {};
+    ss[u] = (ss[u] || 0) + (Number(r[2]) || 0);
   });
   return out;
 }
-function mrTemPonto_(u, ref) {
+/** Placar de um grupo numa semana: usuario -> pontos. */
+function mrPlacar_(todos, gid, sem) { return ((todos[gid] || {})[sem]) || {}; }
+function mrTemPonto_(u, gid, ref) {
   var d = lerTudo_('MR_Pontos');
-  for (var i = 0; i < d.length; i++) if (String(d[i][0]) === u && String(d[i][4]) === ref) return true;
+  for (var i = 0; i < d.length; i++) if (String(d[i][0]) === u && String(d[i][6] || '') === gid && String(d[i][4]) === ref) return true;
   return false;
 }
-function mrDarPontos_(u, pontos, motivo, ref) {
-  anexar_(sh_('MR_Pontos'), [[u, mrSemana_(Date.now()), pontos, motivo, ref, agora_()]]);
+function mrDarPontos_(u, gid, pontos, motivo, ref) {
+  anexar_(sh_('MR_Pontos'), [[u, mrSemana_(Date.now()), pontos, motivo, ref, agora_(), gid]]);
 }
 function mrRanking_(membros, pts) {
   return membros.map(function (m) { return { usuario: m.usuario, pontos: (pts || {})[m.usuario] || 0 }; })
@@ -2122,7 +2128,7 @@ function mrTrofeus_(u, todos) {
   for (i = 0; i < MR_SEMANAS_HIST; i++) {
     sem = mrSemanaAnterior_(sem);
     gs.forEach(function (g) {
-      var rk = mrRanking_(mrMembrosDoGrupo_(g.grupo), todos[sem]);
+      var rk = mrRanking_(mrMembrosDoGrupo_(g.grupo), mrPlacar_(todos, g.grupo, sem));
       if (rk.length && rk[0].pontos > 0 && rk[0].usuario === u) total++;
     });
   }
@@ -2158,9 +2164,9 @@ function mrMeusGrupos_(u) {
   lerTudo_('MR_Membros').forEach(function (r) { contagem[String(r[0])] = (contagem[String(r[0])] || 0) + 1; });
   grupos.forEach(function (g) {
     if (!mine[g.id]) return;
-    var rk = mrRanking_(mrMembrosDoGrupo_(g.id), todos[sem]), pos = 0;
+    var rk = mrRanking_(mrMembrosDoGrupo_(g.id), mrPlacar_(todos, g.id, sem)), pos = 0;
     rk.forEach(function (x, i) { if (x.usuario === u) pos = i + 1; });
-    out.push({ id: g.id, nome: g.nome, foto: g.foto, turma: g.turma, periodo: g.periodo, membros: contagem[g.id] || 0, papel: mine[g.id].papel, pontosSemana: (todos[sem] || {})[u] || 0, posicao: pos });
+    out.push({ id: g.id, nome: g.nome, foto: g.foto, turma: g.turma, periodo: g.periodo, membros: contagem[g.id] || 0, papel: mine[g.id].papel, pontosSemana: mrPlacar_(todos, g.id, sem)[u] || 0, posicao: pos });
   });
   var descobrir = grupos.filter(function (g) { return g.publico && !mine[g.id]; }).map(function (g) { return { id: g.id, nome: g.nome, foto: g.foto, turma: g.turma, periodo: g.periodo, membros: contagem[g.id] || 0, codigo: g.codigo }; });
   return { grupos: out, descobrir: descobrir, trofeus: mrTrofeus_(u, todos), semana: { inicio: sem, fimMs: mrFimSemana_(sem) } };
@@ -2183,9 +2189,9 @@ function mrCriarGrupo_(u, p) {
 function mrDetalhe_(u, p) {
   var gid = str_(p.id), g = mrGrupo_(gid), eu = mrExigirMembro_(gid, u);
   var todos = mrPontosTodos_(), agora = Date.now(), sem = mrSemana_(agora), membros = mrMembrosDoGrupo_(gid);
-  var rk = mrRanking_(membros, todos[sem]), minha = 0;
+  var rk = mrRanking_(membros, mrPlacar_(todos, gid, sem)), minha = 0;
   rk.forEach(function (x, i) { if (x.usuario === u) minha = i + 1; });
-  var ant = mrSemanaAnterior_(sem), rkAnt = mrRanking_(membros, todos[ant]), top = rkAnt.length && rkAnt[0].pontos > 0 ? rkAnt[0] : null;
+  var ant = mrSemanaAnterior_(sem), rkAnt = mrRanking_(membros, mrPlacar_(todos, gid, ant)), top = rkAnt.length && rkAnt[0].pontos > 0 ? rkAnt[0] : null;
   var tro = {};
   membros.forEach(function (m) { tro[m.usuario] = mrTrofeus_(m.usuario, todos); });
   var porMembro = {};
@@ -2196,7 +2202,7 @@ function mrDetalhe_(u, p) {
     semana: { inicio: sem, fimMs: mrFimSemana_(sem), diasRestantes: Math.max(0, Math.ceil((mrFimSemana_(sem) - agora) / 86400000)) },
     checkinHoje: mrCheckinHoje_(gid, u),
     ranking: rk.map(function (x, i) { var pe = mrPessoa_(x.usuario); return { usuario: x.usuario, nome: pe.nome, foto: pe.foto, pontos: x.pontos, posicao: i + 1, papel: porMembro[x.usuario].papel, turma: pe.turma, periodo: pe.periodo, trofeus: tro[x.usuario] || 0 }; }),
-    minhaPosicao: minha, meusPontos: (todos[sem] || {})[u] || 0,
+    minhaPosicao: minha, meusPontos: mrPlacar_(todos, gid, sem)[u] || 0,
     anterior: top ? { semana: ant, usuario: top.usuario, nome: mrPessoa_(top.usuario).nome, foto: mrPessoa_(top.usuario).foto, pontos: top.pontos } : null,
     ajustes: { ocultar: eu.ocultar, silenciar: eu.silenciar }
   };
@@ -2248,12 +2254,31 @@ function mrSair_(u, p) {
   mrExigirMembro_(gid, u);
   return comLock_(function () {
     apagarLinhas_('MR_Membros', function (r) { return String(r[0]) === gid && String(r[1]) === u; });
+    apagarLinhas_('MR_Pontos', function (r) { return String(r[6] || '') === gid && String(r[0]) === u; });
     var resto = mrMembrosDoGrupo_(gid);
     if (!resto.length) apagarLinhas_('MR_Grupos', function (r) { return String(r[0]) === gid; });
     else if (!resto.some(function (m) { return m.papel === 'admin'; })) {
       var d = lerTudo_('MR_Membros');
       for (var i = 0; i < d.length; i++) if (String(d[i][0]) === gid) { sh_('MR_Membros').getRange(i + 2, 3).setValue('admin'); break; }
     }
+    return { ok: true };
+  });
+}
+
+/** Apaga o grupo inteiro: membros, publicações, comentários, curtidas, palpites e pontos. Só o administrador do grupo. */
+function mrApagarGrupo_(u, p) {
+  var gid = str_(p.id), eu = mrExigirMembro_(gid, u);
+  if (eu.papel !== 'admin') throw erro_('Só quem criou o grupo pode apagá-lo.', 'permissao');
+  return comLock_(function () {
+    var posts = {};
+    mrPostsDoGrupo_(gid).forEach(function (x) { posts[x.id] = 1; });
+    apagarLinhas_('MR_Curtidas', function (r) { return String(r[1]) === gid || !!posts[String(r[0])]; });
+    apagarLinhas_('MR_Comentarios', function (r) { return String(r[2]) === gid || !!posts[String(r[1])]; });
+    apagarLinhas_('MR_Palpites', function (r) { return String(r[1]) === gid || !!posts[String(r[0])]; });
+    apagarLinhas_('MR_Posts', function (r) { return String(r[1]) === gid; });
+    apagarLinhas_('MR_Pontos', function (r) { return String(r[6] || '') === gid; });
+    apagarLinhas_('MR_Membros', function (r) { return String(r[0]) === gid; });
+    apagarLinhas_('MR_Grupos', function (r) { return String(r[0]) === gid; });
     return { ok: true };
   });
 }
@@ -2340,7 +2365,7 @@ function mrCheckin_(u, p) {
   return comLock_(function () {
     if (mrCheckinHoje_(gid, u)) throw erro_('Você já fez o check-in de hoje neste grupo.');
     var ref = 'checkin:' + mrDia_(Date.now()), pts = 0;
-    if (!mrTemPonto_(u, ref)) { mrDarPontos_(u, MR_PTS_CHECKIN, 'checkin', ref); pts = MR_PTS_CHECKIN; }
+    if (!mrTemPonto_(u, gid, ref)) { mrDarPontos_(u, gid, MR_PTS_CHECKIN, 'checkin', ref); pts = MR_PTS_CHECKIN; }
     var post = mrNovoPost_(gid, u, 'checkin', texto, foto, { pontos: pts });
     return { id: post.id, pontos: pts };
   });
@@ -2404,7 +2429,7 @@ function mrHistorico_(u, p) {
   var todos = mrPontosTodos_(), membros = mrMembrosDoGrupo_(gid), sem = mrSemana_(Date.now()), out = [];
   for (var i = 0; i < MR_SEMANAS_HIST; i++) {
     sem = mrSemanaAnterior_(sem);
-    var rk = mrRanking_(membros, todos[sem]).filter(function (x) { return x.pontos > 0; });
+    var rk = mrRanking_(membros, mrPlacar_(todos, gid, sem)).filter(function (x) { return x.pontos > 0; });
     if (!rk.length) continue;
     out.push({ semana: sem, ranking: rk.slice(0, 5).map(function (x, k) { var pe = mrPessoa_(x.usuario); return { usuario: x.usuario, nome: pe.nome, foto: pe.foto, pontos: x.pontos, posicao: k + 1 }; }) });
   }
@@ -2415,22 +2440,25 @@ function mrHistorico_(u, p) {
 function mrPerfil_(u, p) {
   var id = str_(p.usuario) || u, todos = mrPontosTodos_(), sem = mrSemana_(Date.now());
   var pe = mrPessoa_(id);
-  return { id: id, nome: pe.nome, foto: pe.foto, turma: pe.turma, periodo: pe.periodo, trofeus: mrTrofeus_(id, todos), pontosSemana: (todos[sem] || {})[id] || 0 };
+  var semana = mrGruposDe_(id).reduce(function (s, m) { return s + (mrPlacar_(todos, m.grupo, sem)[id] || 0); }, 0);
+  return { id: id, nome: pe.nome, foto: pe.foto, turma: pe.turma, periodo: pe.periodo, trofeus: mrTrofeus_(id, todos), pontosSemana: semana };
 }
 
 // ── Atividades automáticas (chamadas pelo restante do sistema) ──
 function mrRegistrarAtividade_(u, subtipo, titulo, ref, pontos, extra) {
-  var pts = 0;
-  if (pontos > 0 && !mrTemPonto_(u, ref)) { mrDarPontos_(u, pontos, subtipo, ref); pts = pontos; }
-  var existentes = {};
+  var existentes = {}, maior = 0;
   lerTudo_('MR_Posts').forEach(function (r) { if (String(r[2]) === u && String(r[3]) === 'atividade') { var j = jsonOr_(r[6], {}) || {}; if (j.ref) existentes[String(r[1]) + '|' + j.ref] = 1; } });
   mrGruposDe_(u).forEach(function (m) {
+    var pts = 0;
+    // Os pontos são do grupo: cada grupo em que a pessoa está recebe os seus (uma vez por atividade).
+    if (pontos > 0 && !mrTemPonto_(u, m.grupo, ref)) { mrDarPontos_(u, m.grupo, pontos, subtipo, ref); pts = pontos; }
+    maior = Math.max(maior, pts);
     if (m.ocultar || existentes[m.grupo + '|' + ref]) return;
     var dados = { subtipo: subtipo, titulo: titulo, pontos: pts, ref: ref };
     Object.keys(extra || {}).forEach(function (k) { dados[k] = extra[k]; });
     mrNovoPost_(m.grupo, u, 'atividade', '', '', dados);
   });
-  return pts;
+  return maior;
 }
 
 function mrAtividadeSessao_(u, rel) {
@@ -5124,7 +5152,7 @@ var mfVGrupo = { render: async function (r, { params, query: qy }) {
         <div class="mt-3 grid gap-3 sm:grid-cols-2"><div><label class="label" for="pz-turma">Turma do grupo (ano + semestre)</label><input id="pz-turma" class="input" maxlength="6" placeholder="2023B" data-turma-auto="pz-periodo" value="${d.turma}"></div><div><label class="label" for="pz-periodo">Período</label><select id="pz-periodo" class="input"><option value="0">—</option>${Array.from({ length: 12 }, (_, i) => O`<option value="${i + 1}" ${d.periodo === i + 1 ? ot("selected") : ""}>${i + 1}º Período</option>`)}</select></div></div></section>` : ""}
       <section class="space-y-4 rounded-xl border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-sm font-semibold text-brand dark:text-sky-300">Privacidade do grupo</h3>${mfSwitch("pz-publico", "globe", "Grupo público", "Permita que seu grupo seja encontrado por outras pessoas na página inicial do MedRats.", d.publico, !adm)}${mfSwitch("pz-convidam", "send", "Membros podem convidar", "Todos os membros do grupo podem convidar novos participantes.", d.convidam, !adm)}</section>
       <section class="space-y-4 rounded-xl border border-slate-200 p-3 dark:border-slate-700"><h3 class="text-sm font-semibold text-brand dark:text-sky-300">Ajustes individuais</h3>${mfSwitch("pz-ocultar", "eye-off", "Ocultar minhas atividades", "Suas atividades (aulas, trilhas e baterias) deixam de aparecer neste grupo. Check-ins não são afetados.", d.ajustes.ocultar)}${mfSwitch("pz-silenciar", "bell-off", "Silenciar notificações deste grupo", "Você deixa de receber avisos deste grupo. Ninguém do grupo é avisado.", d.ajustes.silenciar)}</section>
-      <button type="button" class="btn btn-outline text-rose-700 dark:text-rose-400" id="pz-sair">Sair do grupo</button></div>` });
+      <div class="flex flex-wrap gap-2"><button type="button" class="btn btn-outline text-rose-700 dark:text-rose-400" id="pz-sair">Sair do grupo</button>${adm ? O`<button type="button" class="btn bg-rose-600 text-white hover:bg-rose-700" id="pz-apagar"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>Apagar grupo</button>` : ""}</div></div>` });
     const dlg = mfDialogoTopo(), q = s => dlg.querySelector(s);
     dlg.addEventListener("input", ev => { if (ev.target.id === "pz-nome") q("#pz-cont").textContent = ev.target.value.length; });
     dlg.addEventListener("change", async ev => {
@@ -5143,6 +5171,10 @@ var mfVGrupo = { render: async function (r, { params, query: qy }) {
       const bi = ev.target.closest("[data-ic]");
       if (bi) { try { const v = "ic:" + bi.dataset.ic; await ge("mrAtualizarGrupo", { id: gid, foto: v }); d.foto = v; q("#pz-avatar").innerHTML = String(mfAvatarGrupo({ nome: d.nome, foto: v }, "h-20 w-20")); mfMarcarIcone(dlg, bi.dataset.ic); be("Ícone atualizado.", "ok", 1500); } catch (x) { be(x.message, "erro"); } return; }
       if (ev.target.closest("#pz-atualizar")) { try { await ge("mrAtualizarGrupo", { id: gid, nome: q("#pz-nome").value, turma: q("#pz-turma").value.trim(), periodo: Number(q("#pz-periodo").value) || 0 }); be("Grupo atualizado.", "ok", 2e3); } catch (x) { be(x.message, "erro"); } }
+      if (ev.target.closest("#pz-apagar")) {
+        if (!await Ac(`Apagar o grupo “${d.nome}”? Somem as publicações, os comentários, os pontos e os membros dele. Não dá para desfazer.`, { confirmar: "Apagar grupo", perigo: !0, titulo: "Apagar grupo" })) return;
+        try { await ge("mrApagarGrupo", { id: gid }); be("Grupo apagado.", "ok", 2500); dlg.close(); location.hash = "#/medrats"; } catch (x) { be(x.message, "erro"); }
+      }
       if (ev.target.closest("#pz-sair")) {
         if (!await Ac("Sair deste grupo? Você perde o acesso ao chat e às atividades, mas seus pontos continuam seus.", { confirmar: "Sair", perigo: !0, titulo: "Sair do grupo" })) return;
         try { await ge("mrSair", { id: gid }); be("Você saiu do grupo.", "ok", 2e3); dlg.close(); location.hash = "#/medrats"; } catch (x) { be(x.message, "erro"); }
