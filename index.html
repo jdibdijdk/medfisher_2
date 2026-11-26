@@ -1317,7 +1317,7 @@ function normalizar_(q, prova) {
   var alternativas = [], i;
   var imagens = [], arrImg = q.imagens === undefined || q.imagens === null ? [] : q.imagens;
   if (!Array.isArray(arrImg)) return { erro: 'Campo "imagens" deve ser uma lista.' };
-  var posValidas = ['enunciado', 'comentario'];
+  var posValidas = ['enunciado', 'comentario', 'inline'];   // 'inline': imagem colada no meio de um texto ([[img:arquivo]])
   for (i = 0; i < alts.length; i++) posValidas.push('alternativa_' + L[i]);
   for (i = 0; i < arrImg.length; i++) {
     var im = arrImg[i] || {}, arq = str_(im.arquivo), pos = str_(im.posicao);
@@ -3423,12 +3423,12 @@ function mfNotarFocoNovo(mapa, q, t) {
 var MF_LETRAS = ["A", "B", "C", "D", "E"];
 function mfCamposQuestao(q) {
   let alts = q.alternativas || [], disc = !alts.length, alt = i => alts[i] || {};
-  return O`<div><label class="label" for="e-enun">Enunciado</label><textarea id="e-enun" name="enunciado" class="input" rows="7" required>${q.enunciado}</textarea></div>
-  ${disc ? O`<div><label class="label" for="e-gab">Resposta esperada</label><textarea id="e-gab" name="gabarito" class="input" rows="3">${q.gabarito || ""}</textarea></div>`
-    : O`<div class="space-y-3"><p class="label mb-0">Alternativas <span class="muted font-normal">(a E é opcional)</span></p>${MF_LETRAS.map((l, i) => O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><label class="label" for="e-alt-${l}">Alternativa ${l}</label><textarea id="e-alt-${l}" name="alt_${l}" class="input" rows="2">${alt(i).texto || ""}</textarea><div class="mb-1 mt-2 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="e-com-${l}">Justificativa da ${l} <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("e-com-" + l)}</div><textarea id="e-com-${l}" name="com_${l}" class="input" rows="2" data-rico>${alt(i).comentario || ""}</textarea></div>`)}</div>
+  return O`<div><label class="label" for="e-enun">Enunciado</label><textarea id="e-enun" name="enunciado" class="input" rows="7" required data-rico data-colar-img="inline">${q.enunciado}</textarea></div>
+  ${disc ? O`<div><label class="label" for="e-gab">Resposta esperada</label><textarea id="e-gab" name="gabarito" class="input" rows="3" data-rico data-colar-img="inline">${q.gabarito || ""}</textarea></div>`
+    : O`<div class="space-y-3"><p class="label mb-0">Alternativas <span class="muted font-normal">(a E é opcional)</span></p>${MF_LETRAS.map((l, i) => O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><label class="label" for="e-alt-${l}">Alternativa ${l}</label><textarea id="e-alt-${l}" name="alt_${l}" class="input" rows="2" data-colar-img="inline">${alt(i).texto || ""}</textarea><div class="mb-1 mt-2 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="e-com-${l}">Justificativa da ${l} <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("e-com-" + l)}</div><textarea id="e-com-${l}" name="com_${l}" class="input" rows="2" data-rico data-colar-img="inline">${alt(i).comentario || ""}</textarea></div>`)}</div>
     <div><label class="label" for="e-gabl">Gabarito</label><select id="e-gabl" name="gabarito" class="input sm:w-40">${MF_LETRAS.map(l => O`<option ${l === q.gabarito ? ot("selected") : ""}>${l}</option>`)}</select></div>`}
   <label class="inline-flex items-center gap-2"><input type="checkbox" name="anulada" class="h-4 w-4 accent-brand" ${q.anulada ? ot("checked") : ""}>Questão anulada</label>
-  <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="e-com">Comentário / resolução</label>${mfBarraFormato("e-com")}</div><textarea id="e-com" name="comentario" class="input" rows="9" data-rico data-colar-img="comentario">${q.comentario || ""}</textarea><p class="muted mt-1 text-xs">Selecione o texto e use <strong>B</strong> (negrito) ou <em>I</em> (itálico). Para colocar uma imagem na resolução, cole (Ctrl+V) ou arraste o arquivo aqui: ela aparece abaixo do texto.</p></div>
+  <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="e-com">Comentário / resolução</label>${mfBarraFormato("e-com")}</div><textarea id="e-com" name="comentario" class="input" rows="9" data-rico data-colar-img="inline">${q.comentario || ""}</textarea><p class="muted mt-1 text-xs">Selecione o texto e use <strong>B</strong> (negrito) ou <em>I</em> (itálico). Para colocar uma imagem na resolução, cole (Ctrl+V) ou arraste o arquivo aqui: ela aparece abaixo do texto.</p></div>
   ${mfCamposTax(q, Yr)}`;
 }
 /** Abre o editor da questão (usuário 02). aposSalvar recebe a questão atualizada. */
@@ -3474,28 +3474,31 @@ async function mfEnviarFotosQ(qid, paraUpload, fotos) {
 }
 /** Edição de questão em partes (enunciado, comandos com resolução e comentário final). */
 function mfEditarPartes(q, aposSalvar) {
-  const fotos = (q.imagens || []).map(m => ({ arquivo: m.arquivo, pos: m.posicao, leg: m.legenda || "", fileId: m.fileId || "", url: "", file: null }));
-  const corpo = O`<div class="space-y-4"><div><label class="label" for="e-enun">Enunciado</label><textarea id="e-enun" name="enunciado" class="input" rows="5" required>${q.enunciado}</textarea></div>
+  const fotos = (q.imagens || []).filter(m => m.posicao !== "inline").map(m => ({ arquivo: m.arquivo, pos: m.posicao, leg: m.legenda || "", fileId: m.fileId || "", url: "", file: null }));
+  const inlineIni = (q.imagens || []).filter(m => m.posicao === "inline").map(m => ({ arquivo: m.arquivo, pos: "inline", leg: "", fileId: m.fileId || "", url: "", file: null }));
+  const corpo = O`<div class="space-y-4"><div><label class="label" for="e-enun">Enunciado</label><textarea id="e-enun" name="enunciado" class="input" rows="5" required data-rico data-colar-img="inline">${q.enunciado}</textarea></div>
     ${mfBlocoFotosQ()}
     <div id="cq-partes" class="space-y-3">${q.alternativas.map((a, i) => O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700" data-parte="${i}"><p class="label mb-2">Comando ${a.letra}</p>
-      <label class="label" for="cq-cmd-${i}">Comando</label><textarea id="cq-cmd-${i}" name="cmd_${i}" class="input" rows="3">${a.texto}</textarea>
+      <label class="label" for="cq-cmd-${i}">Comando</label><textarea id="cq-cmd-${i}" name="cmd_${i}" class="input" rows="3" data-rico data-colar-img="inline">${a.texto}</textarea>
       <div class="mb-1 mt-2 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="cq-res-${i}">Resolução do comando ${a.letra} <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("cq-res-" + i)}</div>
-      <textarea id="cq-res-${i}" name="res_${i}" class="input" rows="3" data-rico>${a.comentario || ""}</textarea></div>`)}</div>
+      <textarea id="cq-res-${i}" name="res_${i}" class="input" rows="3" data-rico data-colar-img="inline">${a.comentario || ""}</textarea></div>`)}</div>
     <div class="flex flex-wrap gap-2"><button type="button" class="btn btn-outline btn-sm" id="cq-add-parte"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Adicionar comando</button><button type="button" class="btn btn-ghost btn-sm" id="cq-rem-parte"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>Remover último</button></div>
     <label class="inline-flex items-center gap-2"><input type="checkbox" name="anulada" class="h-4 w-4 accent-brand" ${q.anulada ? ot("checked") : ""}>Questão anulada</label>
-    <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="e-com">Comentário final <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("e-com")}</div><textarea id="e-com" name="comentario" class="input" rows="5" data-rico>${q.comentario || ""}</textarea></div>
+    <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="e-com">Comentário final <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("e-com")}</div><textarea id="e-com" name="comentario" class="input" rows="5" data-rico data-colar-img="inline">${q.comentario || ""}</textarea></div>
     ${mfCamposTax(q)}</div>`;
   const prom = mfModalTax({ titulo: `Editar questão ${q.numero} · ${q.instituicao}`, largo: !0, confirmar: "Salvar", corpo, onSubmit: async v => {
     v = await mfResolverFoco(v);
     const n = Object.keys(v).filter(k => /^cmd_\d+$/.test(k)).length;
     const alternativas = Array.from({ length: n }, (_, i) => ({ texto: String(v["cmd_" + i] || "").trim(), comentario: String(v["res_" + i] || "").trim() }));
     if (!n || alternativas.some(x => !x.texto)) throw new Error("Escreva o texto de todos os comandos.");
-    const nova = await ge("editarQuestao", { id: q.id, enunciado: v.enunciado, alternativas, gabarito: "", anulada: !!v.anulada, comentario: v.comentario || "", area: v.area, subarea: v.subarea, foco: v.foco, imagens: fotos.map(m => ({ arquivo: m.arquivo, posicao: m.pos, legenda: m.leg || "" })) });
-    const falhas = await mfEnviarFotosQ(q.id, nova.paraUpload, fotos);
+    const todas = [...fotos, ...(dlg.mfTexto || [])];
+    const nova = await ge("editarQuestao", { id: q.id, enunciado: v.enunciado, alternativas, gabarito: "", anulada: !!v.anulada, comentario: v.comentario || "", area: v.area, subarea: v.subarea, foco: v.foco, imagens: todas.map(m => ({ arquivo: m.arquivo, posicao: m.pos, legenda: m.leg || "" })) });
+    const falhas = await mfEnviarFotosQ(q.id, nova.paraUpload, todas);
     be(falhas.length ? `Questão salva, mas não foi possível enviar: ${falhas.join(", ")}` : "Questão atualizada.", falhas.length ? "erro" : "ok", 4000);
     aposSalvar && await aposSalvar(nova);
   } }, q);
   const dlg = mfDialogoTopo();
+  dlg.mfTexto = inlineIni;
   const pintar = mfLigarFotos(dlg, fotos, () => mfPosicoesQ("partes", dlg.querySelectorAll("[data-parte]").length));
   dlg.addEventListener("click", ev => {
     const box = dlg.querySelector("#cq-partes");
@@ -3514,7 +3517,8 @@ async function mfEditarQuestao(id, aposSalvar) {
   let disc = !(q.alternativas || []).length;
   const POS_FOTO = ["enunciado", "comentario", ...(disc ? [] : MF_LETRAS.map(l => "alternativa_" + l))];
   const rotPos = p => p === "enunciado" ? "No enunciado" : p === "comentario" ? "Na resolução" : "Na alternativa " + p.slice(-1);
-  let fotos = (q.imagens || []).map(m => ({ arquivo: m.arquivo, pos: m.posicao, leg: m.legenda || "", fileId: m.fileId || "", url: "", file: null }));
+  let fotos = (q.imagens || []).filter(m => m.posicao !== "inline").map(m => ({ arquivo: m.arquivo, pos: m.posicao, leg: m.legenda || "", fileId: m.fileId || "", url: "", file: null }));
+  const inlineIni = (q.imagens || []).filter(m => m.posicao === "inline").map(m => ({ arquivo: m.arquivo, pos: "inline", leg: "", fileId: m.fileId || "", url: "", file: null }));
   const corpoFotos = O`<div class="mt-3"><label class="label" for="eq-fotos">Fotos</label><input id="eq-fotos" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" class="input py-1.5"><ul id="eq-imgs" class="mt-3 space-y-2"></ul></div>`;
   const prom = mfModalTax({ titulo: `Editar questão ${q.numero} · ${q.instituicao} ${mfAno(q)}`, largo: !0, confirmar: "Salvar", corpo: O`${mfCamposQuestao(q)}${corpoFotos}`, onSubmit: async v => {
     v = await mfResolverFoco(v);
@@ -3528,13 +3532,15 @@ async function mfEditarQuestao(id, aposSalvar) {
       });
       if (alternativas.length < 4) throw new Error("A questão precisa de 4 ou 5 alternativas.");
     }
-    let nova = await ge("editarQuestao", { id: q.id, enunciado: v.enunciado, alternativas, gabarito: v.gabarito, anulada: !!v.anulada, comentario: v.comentario, area: v.area, subarea: v.subarea, foco: v.foco, imagens: fotos.map(m => ({ arquivo: m.arquivo, posicao: m.pos, legenda: m.leg })) });
+    const todas = [...fotos, ...((dlg && dlg.mfTexto) || [])];
+    let nova = await ge("editarQuestao", { id: q.id, enunciado: v.enunciado, alternativas, gabarito: v.gabarito, anulada: !!v.anulada, comentario: v.comentario, area: v.area, subarea: v.subarea, foco: v.foco, imagens: todas.map(m => ({ arquivo: m.arquivo, posicao: m.pos, legenda: m.leg })) });
     let falhas = [];
-    for (const up of nova.paraUpload || []) { const m = fotos.find(x => x.arquivo === up.arquivo); if (m && m.file) try { await mfUploadImgQuestao(q.id, up.arquivo, m.file); } catch { falhas.push(m.file.name); } }
+    for (const up of nova.paraUpload || []) { const m = todas.find(x => x.arquivo === up.arquivo); if (m && m.file) try { await mfUploadImgQuestao(q.id, up.arquivo, m.file); } catch { falhas.push(m.file.name); } }
     be(falhas.length ? `Questão salva, mas ${Gt(falhas.length, "foto não foi enviada", "fotos não foram enviadas")}: ${falhas.join(", ")}` : nova.notasRecalculadas ? "Questão atualizada. Os acertos já registrados foram recalculados." : "Questão atualizada.", falhas.length ? "erro" : "ok", falhas.length ? 8e3 : 4e3);
     aposSalvar && await aposSalvar(nova);
   } }, q);
   const dlg = mfDialogoTopo(), ul = dlg && dlg.querySelector("#eq-imgs");
+  if (dlg) dlg.mfTexto = inlineIni;
   if (ul) {
     const desenhar = () => {
       ul.innerHTML = String(O`${fotos.map((m, k) => O`<li class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-2 dark:border-slate-700">${m.url ? O`<img src="${m.url}" alt="" class="h-14 w-14 rounded-lg object-cover">` : O`<span class="muted flex h-14 w-14 items-center justify-center rounded-lg bg-slate-100 text-[10px] dark:bg-slate-800">foto</span>`}
@@ -3551,6 +3557,7 @@ async function mfEditarQuestao(id, aposSalvar) {
       if (t.dataset.efPos !== void 0) fotos[Number(t.dataset.efPos)].pos = t.value;
     });
     dlg.addEventListener("mf:imagem", ev => {
+      if (ev.detail.pos === "inline") return;   // imagens no meio do texto ficam em dlg.mfTexto
       ev.detail.arquivos.forEach((f, k) => fotos.push({ arquivo: mfNomeImg(f, k), pos: ev.detail.pos, leg: "", fileId: "", url: URL.createObjectURL(f), file: f }));
       desenhar(); be(ev.detail.arquivos.length > 1 ? "Imagens adicionadas à resolução (abaixo do texto)." : "Imagem adicionada à resolução (abaixo do texto).", "ok", 2500);
     });
@@ -3886,13 +3893,13 @@ async function mfMontarImpressao({ filtro, qtd, ordem, conteudo }) {
   let mesma = new Set(itens.map(q => q.provaId)).size === 1;
   let corpo = itens.map((q, k) => O`<section class="pq">
     <h2>${k + 1}. ${rotulo(q)}${q.anulada ? " (anulada)" : ""}</h2>
-    <div class="enun texto-questao">${q.enunciado}</div>${imgs(q, "enunciado")}
-    ${disc(q) ? O`<div class="resp">Resposta:</div>` : O`<ul class="alts">${q.alternativas.map(a => O`<li><span class="al">${a.letra}</span><span class="alt-t texto-questao">${a.texto}${imgs(q, "alternativa_" + a.letra)}</span></li>`)}</ul>`}
+    <div class="enun texto-questao">${mfFmt(q.enunciado, q.imagens)}</div>${imgs(q, "enunciado")}
+    ${disc(q) ? O`<div class="resp">Resposta:</div>` : O`<ul class="alts">${q.alternativas.map(a => O`<li><span class="al">${a.letra}</span><span class="alt-t texto-questao">${mfFmt(a.texto, q.imagens)}${imgs(q, "alternativa_" + a.letra)}</span></li>`)}</ul>`}
   </section>`);
   let gabarito = conteudo === "questoes" ? "" : O`<div data-sec="gabarito"><table><thead><tr><th>Nº</th><th>Questão</th><th>Gabarito</th><th>Área › Foco</th></tr></thead><tbody>${itens.map((q, k) => O`<tr><td>${k + 1}</td><td>${mesma ? "Questão " + q.numero : rotulo(q)}</td><td>${gab(q)}</td><td>${q.area} › ${q.foco}</td></tr>`)}</tbody></table></div>`;
   let comentarios = conteudo !== "completo" ? "" : O`<div data-sec="comentarios"><h2 class="sec">Comentários</h2>${itens.map((q, k) => {
     let h = mfDividirComentario({ com: q.comentario, alts: q.alternativas || [] });
-    return O`<div class="cq"><h3>${k + 1}. ${rotulo(q)} — Gabarito: ${gab(q)}</h3>${h.com ? O`<p class="texto-questao">${mfFmt(h.com)}</p>` : ""}${h.alts.filter(a => a.comentario).map(a => O`<p class="texto-questao"><b>${a.letra})</b> ${a.comentario}</p>`)}${imgs(q, "comentario")}</div>`;
+    return O`<div class="cq"><h3>${k + 1}. ${rotulo(q)} — Gabarito: ${gab(q)}</h3>${h.com ? O`<p class="texto-questao">${mfFmt(h.com, q.imagens)}</p>` : ""}${h.alts.filter(a => a.comentario).map(a => O`<p class="texto-questao"><b>${a.letra})</b> ${mfFmt(a.comentario, q.imagens)}</p>`)}${imgs(q, "comentario")}</div>`;
   })}</div>`;
   let raiz = document.createElement("div");
   raiz.innerHTML = String(O`<div id="fonte"><div data-sec="questoes">${corpo}</div>${gabarito}${comentarios}</div>`);
@@ -4172,15 +4179,15 @@ var mfUltimoCQ = { destino: "autoral", professor: "", area: "", subarea: "", foc
 function mfParteCQ(i) {
   const l = "ABCDEFGHIJ"[i] || String(i + 1);
   return O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700" data-parte="${i}"><p class="label mb-2">Comando ${l}</p>
-    <label class="label" for="cq-cmd-${i}">Comando</label><textarea id="cq-cmd-${i}" name="cmd_${i}" class="input" rows="3"></textarea>
-    <div class="mb-1 mt-2 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="cq-res-${i}">Resolução do comando ${l} <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("cq-res-" + i)}</div><textarea id="cq-res-${i}" name="res_${i}" class="input" rows="3" data-rico></textarea></div>`;
+    <label class="label" for="cq-cmd-${i}">Comando</label><textarea id="cq-cmd-${i}" name="cmd_${i}" class="input" rows="3" data-rico data-colar-img="inline"></textarea>
+    <div class="mb-1 mt-2 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="cq-res-${i}">Resolução do comando ${l} <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("cq-res-" + i)}</div><textarea id="cq-res-${i}" name="res_${i}" class="input" rows="3" data-rico data-colar-img="inline"></textarea></div>`;
 }
 function mfTipoCQ(tipo, partes) {
-  if (tipo === "discursiva") return O`<div><label class="label" for="cq-resp">Resposta esperada</label><textarea id="cq-resp" name="respostaEsperada" class="input" rows="4"></textarea></div>`;
+  if (tipo === "discursiva") return O`<div><label class="label" for="cq-resp">Resposta esperada</label><textarea id="cq-resp" name="respostaEsperada" class="input" rows="4" data-rico data-colar-img="inline"></textarea></div>`;
   if (tipo === "partes") return O`<div class="space-y-3"><p class="muted text-xs">Depois de responder a um comando e se avaliar, o próximo aparece sozinho, na mesma página.</p>
     <div id="cq-partes" class="space-y-3">${Array.from({ length: partes }, (_, i) => mfParteCQ(i))}</div>
     <div class="flex flex-wrap gap-2"><button type="button" class="btn btn-outline btn-sm" id="cq-add-parte"><i data-lucide="plus" class="h-4 w-4" aria-hidden="true"></i>Adicionar comando</button><button type="button" class="btn btn-ghost btn-sm" id="cq-rem-parte"><i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>Remover último</button></div></div>`;
-  return O`<div class="space-y-3"><p class="label mb-0">Alternativas <span class="muted font-normal">(a E é opcional)</span></p>${MF_LETRAS.map(l => O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><label class="label" for="cq-alt-${l}">Alternativa ${l}</label><textarea id="cq-alt-${l}" name="alt_${l}" class="input" rows="2"></textarea><div class="mb-1 mt-2 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="cq-com-${l}">Justificativa da ${l} <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("cq-com-" + l)}</div><textarea id="cq-com-${l}" name="com_${l}" class="input" rows="2" data-rico></textarea></div>`)}
+  return O`<div class="space-y-3"><p class="label mb-0">Alternativas <span class="muted font-normal">(a E é opcional)</span></p>${MF_LETRAS.map(l => O`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><label class="label" for="cq-alt-${l}">Alternativa ${l}</label><textarea id="cq-alt-${l}" name="alt_${l}" class="input" rows="2" data-colar-img="inline"></textarea><div class="mb-1 mt-2 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="cq-com-${l}">Justificativa da ${l} <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("cq-com-" + l)}</div><textarea id="cq-com-${l}" name="com_${l}" class="input" rows="2" data-rico data-colar-img="inline"></textarea></div>`)}
     <div class="w-40"><label class="label" for="cq-gab">Gabarito</label><select id="cq-gab" name="gabarito" class="input">${MF_LETRAS.map(l => O`<option>${l}</option>`)}</select></div></div>`;
 }
 function mfCorpoCQ(pre) {
@@ -4190,7 +4197,7 @@ function mfCorpoCQ(pre) {
       <label class="flex items-start gap-2 text-sm"><input type="radio" name="destino" value="uepa" class="mt-1 accent-brand" ${pre.destino === "uepa" ? ot("checked") : ""}><span><strong>Universidade do Estado do Pará (UEPA)</strong> <span class="muted">· aparece nos focos e em simulados e provas completas, separada por professor.</span></span></label></fieldset>
     <div id="cq-prof-wrap" class="${pre.destino === "uepa" ? "" : "hidden"}"><label class="label" for="cq-prof">Professor</label><input id="cq-prof" name="professor" class="input" maxlength="120" list="cq-profs" placeholder="Ex.: Prof. Fulano" autocomplete="off" value="${pre.professor || ""}"><datalist id="cq-profs">${(pre.profs || []).map(x => O`<option value="${x}"></option>`)}</datalist><p class="muted mt-1 text-xs">Escolha um professor já cadastrado ou digite um novo. Você pode voltar depois e acrescentar questões ao mesmo professor, em focos diferentes.</p></div>
     ${mfCamposTax(pre)}
-    <div><label class="label" for="cq-enun">Enunciado</label><textarea id="cq-enun" name="enunciado" class="input" rows="5" required></textarea></div>
+    <div><label class="label" for="cq-enun">Enunciado</label><textarea id="cq-enun" name="enunciado" class="input" rows="5" required data-rico data-colar-img="inline"></textarea></div>
     ${mfBlocoFotosQ()}
     <fieldset class="flex flex-wrap gap-4 text-sm"><legend class="label">Tipo</legend>
       <label class="flex items-center gap-2"><input type="radio" name="tipo" value="objetiva" class="accent-brand" checked>Objetiva</label>
@@ -4198,7 +4205,7 @@ function mfCorpoCQ(pre) {
       <label class="flex items-center gap-2"><input type="radio" name="tipo" value="partes" class="accent-brand">Discursiva em partes (vários comandos)</label></fieldset>
     <div id="cq-tipo">${mfTipoCQ("objetiva", 2)}</div>
     <label class="inline-flex items-center gap-2"><input type="checkbox" name="anulada" class="h-4 w-4 accent-brand">Questão anulada</label>
-    <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="cq-com">Comentário final <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("cq-com")}</div><textarea id="cq-com" name="comentario" class="input" rows="5" data-rico></textarea></div>
+    <div><div class="mb-1 flex flex-wrap items-center justify-between gap-2"><label class="label mb-0" for="cq-com">Comentário final <span class="muted font-normal">(opcional)</span></label>${mfBarraFormato("cq-com")}</div><textarea id="cq-com" name="comentario" class="input" rows="5" data-rico data-colar-img="inline"></textarea></div>
   </div>`;
 }
 async function mfCriarQuestaoAbrir() {
@@ -4223,9 +4230,10 @@ async function mfCriarQuestaoAbrir() {
       pl.partes = Array.from({ length: n }, (_, i) => ({ comando: String(v["cmd_" + i] || "").trim(), resolucao: String(v["res_" + i] || "").trim() }));
       if (!pl.partes.length || pl.partes.some(x => !x.comando)) throw new Error("Escreva o texto de todos os comandos.");
     }
-    pl.imagens = fotos.map(m => ({ arquivo: m.arquivo, posicao: m.pos, legenda: m.leg || "" }));
+    const todas = [...fotos, ...(dlg.mfTexto || [])];
+    pl.imagens = todas.map(m => ({ arquivo: m.arquivo, posicao: m.pos, legenda: m.leg || "" }));
     const r = await ge("criarQuestao", pl);
-    const falhas = await mfEnviarFotosQ(r.id, r.paraUpload, fotos);
+    const falhas = await mfEnviarFotosQ(r.id, r.paraUpload, todas);
     mfUltimoCQ = { destino, professor: profe, area: v.area, subarea: v.subarea, foco: v.foco };
     be(falhas.length ? `Questão criada, mas não foi possível enviar: ${falhas.join(", ")}` : "Questão criada. Para adicionar outra, use Criar questão de novo: o destino e o foco ficam preenchidos.", falhas.length ? "erro" : "ok", 5000);
   } }, pre);
@@ -4938,8 +4946,19 @@ var mfVNovaProva = { render: async function (r, { query: qy }) {
 /** Texto do usuário já escapado, com **negrito** e *itálico*. */
 /** A janela (dialog) aberta mais recente, que fica por cima das outras. */
 function mfDialogoTopo() { const l = document.querySelectorAll("dialog[open]"); return l.length ? l[l.length - 1] : null; }
-function mfFmt(t) {
+/** Imagem colada no meio do texto: o texto guarda [[img:arquivo]]; a imagem vem da lista de imagens da questão. */
+function mfImgInline(arq, imgs) {
+  const lista = imgs || window.__mfImgs || [];
+  const im = lista.find(x => x.arquivo === arq);
+  if (!im || !im.fileId) return '<span class="muted text-xs">[imagem]</span>';
+  const src = (window.CONFIG || {}).FIREBASE ? "data:image/gif;base64,R0lGODlhAQABAAAAACw=" : `https://drive.google.com/thumbnail?id=${encodeURIComponent(im.fileId)}&sz=w1600`;
+  return `<img data-fid="${im.fileId}" src="${src}" alt="" class="mx-1 my-1 inline-block max-h-72 w-auto max-w-full rounded-lg border border-slate-200 align-middle dark:border-slate-700">`;
+}
+/** Escapa o texto e troca os marcadores de imagem (usado pelos grifos do enunciado). */
+function mfQiImg(x, imgs) { return Qi(x).replace(/\[\[img:([^\]\s]+)\]\]/g, (_, a) => mfImgInline(a, imgs)); }
+function mfFmt(t, imgs) {
   let h = String(t == null ? "" : t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  h = h.replace(/\[\[img:([^\]\s]+)\]\]/g, (_, a) => mfImgInline(a, imgs));
   h = h.replace(/\*\*([^*\n][^*]*?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*\w])\*([^*\s][^*\n]*?)\*(?!\*)/g, "$1<em>$2</em>");
   return ot(h);
 }
@@ -4973,6 +4992,25 @@ function mfEmitirImagens(t, lista) {
 document.addEventListener("paste", ev => { const t = ev.target; if (t && t.tagName === "TEXTAREA" && t.hasAttribute("data-colar-img") && ev.clipboardData && mfEmitirImagens(t, ev.clipboardData.files)) ev.preventDefault(); });
 document.addEventListener("dragover", ev => { const t = ev.target; if (t && t.tagName === "TEXTAREA" && t.hasAttribute("data-colar-img") && ev.dataTransfer && [...ev.dataTransfer.types].includes("Files")) ev.preventDefault(); });
 document.addEventListener("drop", ev => { const t = ev.target; if (t && t.tagName === "TEXTAREA" && t.hasAttribute("data-colar-img") && ev.dataTransfer && mfEmitirImagens(t, ev.dataTransfer.files)) ev.preventDefault(); });
+
+/** Insere o texto na posição do cursor. */
+function mfInserirTexto(ta, txt) {
+  const a = ta.selectionStart == null ? ta.value.length : ta.selectionStart, z = ta.selectionEnd == null ? a : ta.selectionEnd;
+  ta.value = ta.value.slice(0, a) + txt + ta.value.slice(z);
+  ta.setSelectionRange(a + txt.length, a + txt.length);
+  ta.dispatchEvent(new Event("input", { bubbles: !0 }));
+}
+/** Imagem colada no meio de um texto: vai para a lista de imagens do diálogo (dlg.mfTexto) e o marcador entra no texto. */
+document.addEventListener("mf:imagem", ev => {
+  const ta = ev.target, dlg = ta && ta.closest && ta.closest("dialog");
+  if (!dlg || !ev.detail || ev.detail.pos !== "inline") return;
+  const lista = dlg.mfTexto || (dlg.mfTexto = []);
+  ev.detail.arquivos.forEach((f, k) => {
+    const arq = mfNomeImg(f, k);
+    lista.push({ file: f, arquivo: arq, pos: "inline", leg: "", fileId: "", url: URL.createObjectURL(f) });
+    mfInserirTexto(ta, ` [[img:${arq}]] `);
+  });
+});
 
 // ── Partes e aulas Flash de uma mesma aula, reunidas num só lugar ──
 function mfOrdemPartes(a, b) { return (a.flash === b.flash ? 0 : a.flash ? 1 : -1) || (a.parte || 999) - (b.parte || 999) || (a.ordem || 0) - (b.ordem || 0) || (a.criadoEm < b.criadoEm ? -1 : 1); }
@@ -5641,7 +5679,7 @@ function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64
         <div class="grid grid-cols-2 gap-3">
           <div><label class="label" for="m-modo">Modo</label><select id="m-modo" name="modo" class="input"><option value="imediato">Ver resposta na hora</option><option value="prova">Prova (gabarito no final)</option></select></div>
           <div><label class="label" for="m-tempo">Tempo limite (min)</label><input id="m-tempo" name="tempoLimiteMin" type="number" min="0" max="720" value="0" class="input"></div>
-        </div>`,confirmar:"Come\xE7ar",onSubmit:async q=>{let Q=await ge("iniciarSessao",{tipo:"trilha",nome:s?"Favoritas":"Treino",filtro:d(),qtd:Number(q.qtd),ordem:q.ordem,modo:q.modo,tempoLimiteMin:Number(q.tempoLimiteMin)});n("#/sessao/"+Q.sessaoId)}})}v(),_(),await A()}var Gg={};xn(Gg,{render:()=>MA});var LA=["A","B","C","D","E"],Kv=[["Amarelo","#FBCF63"],["\xCDndigo","#3B3FBF"],["Menta","#00E5C3"],["Magenta","#A81A55"],["Azul","#3A72B8"]],VA=/^#[0-9A-Fa-f]{6}$/,Mg=r=>`bq_hl_${Ee.usuario}_${r}`;function Vg(r){try{let e=JSON.parse(localStorage.getItem(Mg(r))||"[]");return Array.isArray(e)?e.filter(t=>Array.isArray(t)&&Number.isInteger(t[0])&&Number.isInteger(t[1])&&t[1]>t[0]&&VA.test(t[2])):[]}catch{return[]}}function kg(r,e){try{e.length?localStorage.setItem(Mg(r),JSON.stringify(e)):localStorage.removeItem(Mg(r))}catch{}}function Qv(r,e,t,n,s){let i=new Array(s).fill(null);r.forEach(([u,l,B])=>{for(let d=u;d<l&&d<s;d++)i[d]=B});for(let u=Math.max(0,e);u<Math.min(t,s);u++)i[u]=n;let a=[],o=0;for(;o<s;){if(i[o]===null){o++;continue}let u=o;for(;u<s&&i[u]===i[o];)u++;a.push([o,u,i[o]]),o=u}return a}function Wv(r,e){if(!e.length)return ot(Qi(r));let t=[],n=0;return e.slice().sort((s,i)=>s[0]-i[0]).forEach(([s,i,a])=>{s>n&&t.push(Qi(r.slice(n,s))),t.push(`<mark class="hl" data-a="${s}" data-b="${i}" style="--c:${a}">${Qi(r.slice(s,i))}</mark>`),n=i}),t.push(Qi(r.slice(n))),ot(t.join(""))}function kA(r,e){let n=2*Math.PI*22;return O`<svg viewBox="0 0 56 56" class="h-14 w-14 shrink-0" role="img" aria-label="${r}% dos usuários marcaram esta alternativa">
+        </div>`,confirmar:"Come\xE7ar",onSubmit:async q=>{let Q=await ge("iniciarSessao",{tipo:"trilha",nome:s?"Favoritas":"Treino",filtro:d(),qtd:Number(q.qtd),ordem:q.ordem,modo:q.modo,tempoLimiteMin:Number(q.tempoLimiteMin)});n("#/sessao/"+Q.sessaoId)}})}v(),_(),await A()}var Gg={};xn(Gg,{render:()=>MA});var LA=["A","B","C","D","E"],Kv=[["Amarelo","#FBCF63"],["\xCDndigo","#3B3FBF"],["Menta","#00E5C3"],["Magenta","#A81A55"],["Azul","#3A72B8"]],VA=/^#[0-9A-Fa-f]{6}$/,Mg=r=>`bq_hl_${Ee.usuario}_${r}`;function Vg(r){try{let e=JSON.parse(localStorage.getItem(Mg(r))||"[]");return Array.isArray(e)?e.filter(t=>Array.isArray(t)&&Number.isInteger(t[0])&&Number.isInteger(t[1])&&t[1]>t[0]&&VA.test(t[2])):[]}catch{return[]}}function kg(r,e){try{e.length?localStorage.setItem(Mg(r),JSON.stringify(e)):localStorage.removeItem(Mg(r))}catch{}}function Qv(r,e,t,n,s){let i=new Array(s).fill(null);r.forEach(([u,l,B])=>{for(let d=u;d<l&&d<s;d++)i[d]=B});for(let u=Math.max(0,e);u<Math.min(t,s);u++)i[u]=n;let a=[],o=0;for(;o<s;){if(i[o]===null){o++;continue}let u=o;for(;u<s&&i[u]===i[o];)u++;a.push([o,u,i[o]]),o=u}return a}function Wv(r,e){if(!e.length)return ot(mfQiImg(r));let t=[],n=0;return e.slice().sort((s,i)=>s[0]-i[0]).forEach(([s,i,a])=>{s>n&&t.push(mfQiImg(r.slice(n,s))),t.push(`<mark class="hl" data-a="${s}" data-b="${i}" style="--c:${a}">${mfQiImg(r.slice(s,i))}</mark>`),n=i}),t.push(mfQiImg(r.slice(n))),ot(t.join(""))}function kA(r,e){let n=2*Math.PI*22;return O`<svg viewBox="0 0 56 56" class="h-14 w-14 shrink-0" role="img" aria-label="${r}% dos usuários marcaram esta alternativa">
     <circle cx="28" cy="28" r="${22}" fill="none" stroke-width="3" class="stroke-slate-200 dark:stroke-slate-700"/>
     <circle cx="28" cy="28" r="${22}" fill="none" stroke-width="3" stroke="${e}" stroke-linecap="round" stroke-dasharray="${(n*r/100).toFixed(1)} ${n.toFixed(1)}" transform="rotate(-90 28 28)"/>
     <text x="28" y="33" text-anchor="middle" font-size="13" font-weight="600" class="fill-slate-700 dark:fill-slate-200" style="font-family:inherit">${r}<tspan font-size="10">%</tspan></text></svg>`}async function MA(r,{params:e,navegar:t}){let mfRs={},mfRv=new Set,n=!!e.id,s=null,i=[],a="#/questoes",o=new Map,u={},l=new Set,B=new Set,d={},p={},m={},v={},_=new Set,A={},N={},K=new Set,$={},z=0,q=Date.now(),Q=null,w=!1,y=!1,g=null,E=!1,D=!1,T=!1,b=!1,fe=Kv[0][1],Ne=[],et=!1;if(n){let V=null;try{V=JSON.parse(sessionStorage.getItem("bq_fila")||"null")}catch{}V&&Array.isArray(V.ids)&&V.ids.includes(e.id)?(i=V.ids,a=V.origem||a,z=i.indexOf(e.id)):i=[e.id]}else{let V=await ge("obterSessao",{sessaoId:e.sessaoId});if(V.fim){t("#/relatorio/"+V.id);return}s=V,i=V.questoesIds,a="#/simulados",Object.entries(V.estado).forEach(([ce,[ye,xe]])=>{u[ce]={marcada:typeof ye=="string"&&ye[0]==="§"?ye.slice(1):ye,correta:xe===null?null:xe===1}}),V.favoritas.forEach(ce=>l.add(ce));let M=i.findIndex(ce=>!u[ce]);z=M<0?0:M}let Ie=!!s&&s.config.modo==="prova",qe=s&&s.config.tempoLimiteMin?Date.parse(s.inicio)+s.config.tempoLimiteMin*6e4:0,xt=s?s.id:void 0;r.innerHTML=String(O`
@@ -5679,7 +5717,7 @@ function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64
       <div class="flex items-start gap-4">
         <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold ${en}">${xe}</span>
         <div class="min-w-0 flex-1">
-          <p class="texto-questao text-[15px] leading-relaxed ${Lt&&Ve!=="neutra"?"font-semibold":""}">${V.texto}</p>
+          <p class="texto-questao text-[15px] leading-relaxed ${Lt&&Ve!=="neutra"?"font-semibold":""}">${mfFmt(V.texto)}</p>
           ${Gn}
           ${Ve==="correta"?O`<span class="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-200"><i data-lucide="circle-check" class="h-4 w-4" aria-hidden="true"></i>Correta</span>`:""}
           ${Ve==="errada"?O`<span class="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950 dark:text-rose-200"><i data-lucide="circle-x" class="h-4 w-4" aria-hidden="true"></i>Incorreta</span>`:""}
@@ -5689,7 +5727,7 @@ function NA(r){let s=r.length,i=512/s,a=r.map((o,u)=>{let l=24+u*i+i*.18,B=i*.64
         ${st===null?"":kA(st,ji)}
         <button type="button" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-brand hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800" data-exp="${xe}" aria-expanded="${Lt?"true":"false"}" aria-label="${Lt?"Recolher":"Expandir"} alternativa ${xe}"><i data-lucide="${Lt?"chevron-up":"chevron-down"}" class="h-4 w-4" aria-hidden="true"></i></button>
       </div>
-    </div>`}function zt(){let V=i[z],M=o.get(V),ce=rt("#q");window.__mfQ=M||null;if(!M){ce.innerHTML=String($n("file-question","Quest\xE3o indispon\xEDvel","Ela pode ter sido removida do banco. Use Pr\xF3xima para continuar."));return}if(M.formato==="partes"){window.__mfCtx=xt;window.__mfZt=zt;mfRenderPartes(M,ce,V,u[V]);return}let ye=u[V],xe=!!ye,dis=!M.alternativas.length,Te=(dis||!Ie)&&xe&&!_.has(V),Ve=Te?Hi(M):null,Lt=A[V]!==void 0?A[V]:Te||Ee.prefs.ocultarFoco===!1,me=A[V]!==void 0?A[V]:Te||!Ee.prefs.ocultarArea;Ne=Vg(V);mfFundo(M.area);let st=$[V]||($[V]=new Set),Zt=Ie?ye&&ye.marcada:Q,en=Tt=>Tc((M.imagens||[]).filter(We=>We.posicao===Tt)),ji=!!v[V],dc=dis?mfDisc({feito:Te,ans:ye,rev:mfRv.has(V),txt:mfRs[V]!==void 0?mfRs[V]:mfRascLer(V),res:Te||mfRv.has(V)?Hi(M):null,env:y}):"",Gn=(Tt,We,qn,jr,Js="")=>O`<button type="button" id="${Tt}" class="relative flex h-9 w-9 items-center justify-center rounded-full text-brand hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800" aria-label="${qn}" title="${qn}" ${jr!==null?ot(`aria-pressed="${jr}"`):""}><i data-lucide="${We}" class="h-5 w-5 ${Js}" aria-hidden="true"></i></button>`;ce.innerHTML=String(O`
+    </div>`}function zt(){let V=i[z],M=o.get(V),ce=rt("#q");window.__mfQ=M||null;window.__mfImgs=(M&&M.imagens)||[];if(!M){ce.innerHTML=String($n("file-question","Quest\xE3o indispon\xEDvel","Ela pode ter sido removida do banco. Use Pr\xF3xima para continuar."));return}if(M.formato==="partes"){window.__mfCtx=xt;window.__mfZt=zt;mfRenderPartes(M,ce,V,u[V]);MC(ce);return}let ye=u[V],xe=!!ye,dis=!M.alternativas.length,Te=(dis||!Ie)&&xe&&!_.has(V),Ve=Te?Hi(M):null,Lt=A[V]!==void 0?A[V]:Te||Ee.prefs.ocultarFoco===!1,me=A[V]!==void 0?A[V]:Te||!Ee.prefs.ocultarArea;Ne=Vg(V);mfFundo(M.area);let st=$[V]||($[V]=new Set),Zt=Ie?ye&&ye.marcada:Q,en=Tt=>Tc((M.imagens||[]).filter(We=>We.posicao===Tt)),ji=!!v[V],dc=dis?mfDisc({feito:Te,ans:ye,rev:mfRv.has(V),txt:mfRs[V]!==void 0?mfRs[V]:mfRascLer(V),res:Te||mfRv.has(V)?Hi(M):null,env:y}):"",Gn=(Tt,We,qn,jr,Js="")=>O`<button type="button" id="${Tt}" class="relative flex h-9 w-9 items-center justify-center rounded-full text-brand hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800" aria-label="${qn}" title="${qn}" ${jr!==null?ot(`aria-pressed="${jr}"`):""}><i data-lucide="${We}" class="h-5 w-5 ${Js}" aria-hidden="true"></i></button>`;ce.innerHTML=String(O`
     <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <header class="flex flex-wrap items-start justify-between gap-3 px-5 py-5 sm:px-8">
         <div class="min-w-0">
