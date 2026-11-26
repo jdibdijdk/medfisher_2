@@ -3705,13 +3705,12 @@ function mfPartesResposta(ans) {
 /** Cabeçalho da questão: primeiro "Autoral" ou "UEPA"; o nome do professor só aparece depois da resposta. */
 function mfRotuloOrigem(M, mostrarProf) {
   if (M.selecaoProva === "Autoral" && !mfAno(M)) return "Autoral";   // Autoral avulsa (sem turma)
-  if (M.selecaoProva === "UEPA") return M.instituicao;
+  if (M.selecaoProva === "UEPA") return M.instituicao + (M.provaNome ? " \xB7 " + M.provaNome : "");
   return `${M.instituicao} - ${mfAno(M)}${M.selecaoRotulo ? " \xB7 " + M.selecaoRotulo : ""}`;
 }
-/** Chips da prova; na UEPA, o professor aparece num chip ao lado (mesmo estilo), depois da resposta. */
+/** Chip da prova; na UEPA, o nome do professor vem sempre, no mesmo chip ("UEPA · Prof. X"). */
 function mfChipsOrigem(M, mostrarProf) {
-  const prof = M.selecaoProva === "UEPA" && mostrarProf && M.provaNome;
-  return O`${kC("graduation-cap", mfRotuloOrigem(M, mostrarProf))}${prof ? kC("user", M.provaNome) : ""}`;
+  return kC("graduation-cap", mfRotuloOrigem(M, mostrarProf));
 }
 function mfRenderPartes(M, ce, V, ans) {
   const st = mfPartesCarregar(M), N = M.alternativas.length;
